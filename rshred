@@ -1,0 +1,328 @@
+#!/bin/bash
+trap "caughtsigint" INT
+unset $badfiles
+unset $baddirecs
+anybadfile=0
+anybaddirec=0
+unset $littlebad
+anylittlebad=0
+shrederrors=0
+confexist=0
+tempexist=0
+oldtempexist=0
+tempexist=0
+logsyes=0
+powerdown=0
+unset $oldtemp
+unset $crnttemp
+unset $logpath
+unset $notemp
+
+# Functions for SIGINT handling and shredding of temporary files.
+shredtemps() {
+    if [[ $logsyes != 1 ]]; then
+        logpath=""
+    fi
+    if [[ $oldtempexist == 1 ]]; then
+        echo ""
+        echo "Shredding tempfile at $oldtemp..."
+        shred -fuz -n 5 $oldtemp > /dev/null 2>&1
+        if [[ $? != 0 ]]; then
+            echo "WARNING! Shredding of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+        fi
+    fi
+    if [[ $tempexist == 1 ]]; then
+        echo ""
+        echo "Shredding tempfile at $crnttemp..."
+        shred -fuz -n 5 $crnttemp > /dev/null 2>&1
+        if [[ $? != 0 ]]; then
+            echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+        fi
+    fi
+}
+caughtsigint() {
+    echo ""
+    echo "Caught SIGINT!"
+    if [[ $logsyes == 1 && $shredstarted == 1 ]]; then
+        echo ""
+        echo "Appending to logfile..."
+        echo -e "------------------------\nCaught SIGINT at $(date).\n------------------------" >> "$logpath"
+        if [[ $? != 0 ]]; then
+            echo "WARNING! Appending to logfile failed!"
+        fi
+    fi
+    shredtemps
+    echo ""
+    echo "Quitting..."
+    exit 0
+}
+if [[ -n $SUDO_USER ]]; then
+    homedir="/home/$SUDO_USER"
+else
+    homedir="$HOME"
+fi
+# True start of the script.
+if [[ $EUID == 0 ]]; then
+    echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
+    echo ""
+    echo "Type \"YES\" to confirm you understand the risks."
+    read rootconfirm
+    if [[ $rootconfirm != "YES" ]]; then
+        echo ""
+        echo "Script aborted."
+        exit 55
+    else
+        echo ""
+    fi
+fi
+if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
+    echo "~/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
+    read confcreate
+    if [[ ! $confcreate == n && ! $confcreate == N ]]; then
+        mkdir -p $homedir/.config/rshred/
+        echo "# Disables creation of temp files in /tmp alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $homedir/.config/rshred/rshred.conf
+        echo "" >> $homedir/.config/rshred/rshred.conf
+        echo "notemp=OFF" >> $homedir/.config/rshred/rshred.conf
+        echo "" >> $homedir/.config/rshred/rshred.conf
+        echo "# Path for the logfiles." >> $homedir/.config/rshred/rshred.conf
+        echo "" >> $homedir/.config/rshred/rshred.conf
+        echo "logpath=$homedir/.rshred/logs/" >> $homedir/.config/rshred/rshred.conf
+        confexist=1
+        source $homedir/.config/rshred/rshred.conf
+        if [[ -n $SUDO_USER && $EUID == 0 ]]; then
+            chown "$SUDO_USER":"$SUDO_USER" $homedir/.config/rshred/rshred.conf
+            chmod 660 $homedir/.config/rshred/rshred.conf
+        fi
+    fi
+else
+    confexist=1
+    source $homedir/.config/rshred/rshred.conf
+fi
+which shred &>/dev/null
+if [[ $? != 0 ]]; then
+    echo "error: The shred command was not able to be accessed. Please check your \$PATH variable for errors."
+    exit 99
+fi
+echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
+echo "This functionality can be disabled in ~/.config/rshred/rshred.conf, but some functionality will be disabled."
+echo ""
+echo "Welcome to rshred v1.0! Please enter the path of the directory or file you would like to shred."
+read shredvictim
+if [ ! -e "$shredvictim" ]; then
+    echo ""
+    echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."
+    exit 1
+fi
+# If the target is a directory, the user is required to have read permissions to list its contents, and execute permissions to traverse it.
+if [[ -d "$shredvictim" && ( ! -r "$shredvictim" || ! -x "$shredvictim" ) ]]; then
+    echo ""
+    echo "error: You do not have read and/or execute permissions on the directory $(realpath "$shredvictim"). Using sudo rshred may help. Use with extreme caution."
+    exit 2
+# Shred only requires write permissions to shred files.
+elif [[ ! -d "$shredvictim" && ! -w "$shredvictim" ]]; then
+    echo "error: You do not have write permissions on $(realpath "$shredvictim"). Using sudo rshred may help. Use with extreme caution."
+    exit 3
+fi
+# If the user has specified a directory to be shredded, and they have the right permissions on the directory, then their permissions on the files and directories within must also be correct.
+if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
+    echo ""
+    echo "Scanning for files without write permissions in $(realpath "$shredvictim")..."
+    if find "$shredvictim" -type f '!' -writable -print -quit 2>/dev/null | grep -q .; then
+        anybadfile=1
+        tempexist=1
+        crnttemp=$(mktemp)
+        echo "" >> $crnttemp
+        echo "FILES WITHOUT WRITE PERMISSIONS" >> $crnttemp
+        echo "---------------------------------" >> $crnttemp
+        find "$shredvictim" -type f '!' -writable 2>/dev/null 1>>$crnttemp
+        echo "-----------------------------------" >> $crnttemp
+    fi
+    echo "Scanning for directories without read/execute permissions in $(realpath "$shredvictim")..."
+    if find "$shredvictim" -type d \( '!' -readable -o '!' -executable \) -print -quit 2>/dev/null | grep -q .; then
+        if [[ $tempexist != 1 ]]; then
+            tempexist=1
+            crnttemp=$(mktemp)
+        fi
+        anybaddirec=1
+        echo "" >> $crnttemp
+        echo "DIRECTORIES WITHOUT READ/EXECUTE PERMISSIONS" >> $crnttemp
+        echo "---------------------------------------------" >> $crnttemp
+        find "$shredvictim" -type d \( '!' -readable -o '!' -executable \) 2>/dev/null 1>>$crnttemp
+    fi
+    if [[ $anybaddirec == "1" || $anybadfile == "1" ]]; then
+        cat $crnttemp
+        echo ""
+        echo "You do not have the necessary permissions to shred the above items in $(realpath "$shredvictim"). Continue anyway? (y/N)"
+        read badconfirm
+        if [[ ! $badconfirm == "y" && ! $badconfirm == "Y" ]]; then
+            echo ""
+            echo "Shredding tempfile..."
+            shred -fuz -n 5 $crnttemp > /dev/null 2>&1
+            if [[ $? != "0" ]]; then
+                echo ""
+                echo "WARNING! Shredding of tempfile located at $crnttemp failed!"
+            fi
+            echo ""
+            echo "Shred aborted. No changes have been made."
+            exit 4
+        fi
+        echo ""
+    fi
+fi
+echo "Scanning for unremovable files in $(realpath "$shredvictim")..."
+if find "$shredvictim" -type d '!' -writable -print -quit 2>/dev/null | grep -q .; then
+    anylittlebad=1
+    echo "-----------------------------"
+    find "$shredvictim" -type d '!' -writable 2>/dev/null
+    echo "-----------------------------"
+fi
+echo ""
+echo "-f,    change permissions to allow writing if necessary"
+echo "-n,    overwrite N times instead of the default (3)"
+echo "-s,    shred this many bytes (suffixes like K, M, G accepted)"
+echo "-u,    deallocate and remove file after overwriting"
+echo "-v,    show progress"
+echo "-x,    do not round file sizes up to the next full block;"
+echo "-z,    add a final overwrite with zeros to hide shredding"
+echo "-p,    power off the system after shredding completes (using -l is highly reccomended when using this in case of errors)"
+echo "-l,    logs the shred operation to a file. Default location is ~/.rshred/logs/"
+if [[ $anylittlebad == 1 ]]; then
+    echo ""
+    echo "WARNING! You do NOT have write permissions in the directories listed above! -u will not work in these directories!"
+fi
+# Verify that the user entered valid flags. Repeat the prompt until they do.
+finalconfirm=0
+while [[ ! $finalconfirm == YES ]]; do
+    echo "Select the flags you would like to use. Only use one space between -n and its respective value. Same for -s."
+    goodchar=0
+    while [[ $goodchar == 0 ]]; do
+        read flags
+        if echo "$flags" | grep -q '[^ fnsuvxzcplKMGT0-9\-]'; then
+           echo "error: Invalid flags. Please try again."
+        else
+            goodchar=1
+        fi
+    done
+# We grep the user's input to extract which flags the user has specified, and add them to a variable for later.
+    flaggroup="-"
+    if echo "$flags" | grep -q "f"; then
+        flaggroup+="f"
+    fi
+    if echo "$flags" | grep -q "u"; then
+        flaggroup+="u"
+    fi
+    if echo "$flags" | grep -q "v"; then
+        flaggroup+="v"
+    fi
+    if echo "$flags" | grep -q "x"; then
+        flaggroup+="x"
+    fi
+    if echo "$flags" | grep -q "z"; then
+        flaggroup+="z"
+    fi
+    if echo "$flags" | grep -q "p"; then
+        powerdown=1
+    else
+        powerdown=0
+    fi
+    if echo "$flags" | grep -q "l"; then
+        logsyes=1
+    else
+        logsyes=0
+    fi
+    if echo "$flags" | grep -q "n"; then
+        flaggroup+=$(echo "$flags" | grep -o 'n [0-9]*')
+    fi
+    if echo "$flags" | grep -q "s"; then
+        flaggroup+=" -"
+        flaggroup+=$(echo "$flags" | grep -Eo 's [0-9]*[A-Z]?')
+    fi
+    echo "-----------------------------------"
+    echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags $flaggroup! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
+    echo "This action is irreverisible! The shredded data CANNOT by recovered by data recovery experts! Type \"YES\" and press enter to procceed. You may halt the shredding process at any point with Ctrl+C."
+    read finalconfirm
+done
+shredstarted=1
+if [[ $logsyes != 1 ]]; then
+    if [[ $tempexist == 1 ]]; then
+        oldtempexist=1
+        oldtemp=$crnttemp
+        crnttemp=$(mktemp)
+    elif [[ $notemp == OFF ]]; then
+        tempexist=1
+        oldtempexist=0
+        crnttemp=$(mktemp)
+    fi
+fi
+if [[ -d $shredvictim ]]; then
+    echo "Recursively shredding $(realpath "$shredvictim")..."
+else
+    echo "Shredding $(realpath "$shredvictim")..."
+fi
+# The destruction has begun!
+if [[ $logsyes == 1 ]]; then
+    mkdir -p "$logpath" > /dev/null 2>&1
+    logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S') $(realpath $shredvictim)"
+    if echo "$flags" | grep -q "v"; then
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" 2>&1 | stdbuf -o0 tee -a "$logpath"
+    else
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" -v > "$logpath" 2>&1
+    fi
+else
+    if [[ $tempexist == 1 ]]; then
+        if echo "$flags" | grep -q "v"; then
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" 2>&1 | stdbuf -o0 tee -a "$crnttemp"
+        else
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" -v > "$crnttemp" 2>&1
+        fi
+    else
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred "$flaggroup"
+    fi
+fi
+errcount=0
+if [[ $logsyes == 1 ]]; then
+    echo ""
+    echo "Checking for errors..."
+    if grep -q "failed to open for writing" "$logpath"; then
+        errcount=$(grep -c "failed to open for writing" "$logpath")
+        shredtemps
+        echo "" | tee -a "$logpath"
+        echo "Shredding of $shredvictim completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    else
+        shredtemps
+        echo "" | tee -a "$logpath"
+        echo "Shredding of $shredvictim completed. No errors found." | tee -a "$logpath"
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    fi
+elif [[ $tempexist == 1 ]]; then
+    echo ""
+    echo "Checking for errors..."
+    if grep -q "failed to open for writing" "$crnttemp"; then
+        errcount=$(grep -c "failed to open for writing" "$crnttemp")
+        shredtemps
+        echo ""
+        echo "Shredding of $shredvictim completed, but encountered $errcount errors."
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    else
+        shredtemps
+        echo ""
+        echo "Shredding of $shredvictim completed. No errors found."
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    fi
+else
+    echo ""
+    echo "Shredding of $shredvictim completed."
+fi

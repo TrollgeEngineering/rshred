@@ -204,21 +204,21 @@ while [[ ! $finalconfirm == YES ]]; do
         fi
     done
 # We grep the user's input to extract which flags the user has specified, and add them to a variable for later.
-    flaggroup="-"
+    flaggroup=()
     if echo "$flags" | grep -q "f"; then
-        flaggroup+="f"
+        flaggroup+=("-f")
     fi
     if echo "$flags" | grep -q "u"; then
-        flaggroup+="u"
+        flaggroup+=("-u")
     fi
     if echo "$flags" | grep -q "v"; then
-        flaggroup+="v"
+        flaggroup+=("-v")
     fi
     if echo "$flags" | grep -q "x"; then
-        flaggroup+="x"
+        flaggroup+=("-x")
     fi
     if echo "$flags" | grep -q "z"; then
-        flaggroup+="z"
+        flaggroup+=("-z")
     fi
     if echo "$flags" | grep -q "p"; then
         powerdown=1
@@ -231,14 +231,13 @@ while [[ ! $finalconfirm == YES ]]; do
         logsyes=0
     fi
     if echo "$flags" | grep -q "n"; then
-        flaggroup+=$(echo "$flags" | grep -o 'n [0-9]*')
+        flaggroup+=($(echo "$flags" | grep -o '\-n [0-9]*'))
     fi
     if echo "$flags" | grep -q "s"; then
-        flaggroup+=" -"
-        flaggroup+=$(echo "$flags" | grep -Eo 's [0-9]*[A-Z]?')
+        flaggroup+=($(echo "$flags" | grep -Eo '\-s [0-9]*[A-Z]?'))
     fi
     echo "-----------------------------------"
-    echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags $flaggroup! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
+    echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
     echo "This action is irreverisible! The shredded data CANNOT by recovered by data recovery experts! Type \"YES\" and press enter to procceed. You may halt the shredding process at any point with Ctrl+C."
     read finalconfirm
 done
@@ -264,19 +263,19 @@ if [[ $logsyes == 1 ]]; then
     mkdir -p "$logpath" > /dev/null 2>&1
     logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S') $(realpath $shredvictim)"
     if echo "$flags" | grep -q "v"; then
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" 2>&1 | stdbuf -o0 tee -a "$logpath"
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$logpath"
     else
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" -v > "$logpath" 2>&1
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$logpath" 2>&1
     fi
 else
     if [[ $tempexist == 1 ]]; then
         if echo "$flags" | grep -q "v"; then
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" 2>&1 | stdbuf -o0 tee -a "$crnttemp"
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$crnttemp"
         else
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred "$flaggroup" -v > "$crnttemp" 2>&1
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$crnttemp" 2>&1
         fi
     else
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred "$flaggroup"
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
     fi
 fi
 errcount=0

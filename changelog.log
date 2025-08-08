@@ -1,0 +1,2 @@
+rshred v1.1
+-fixed bug involving how the -s flag is handled

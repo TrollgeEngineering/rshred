@@ -114,7 +114,7 @@ echo ""
 echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
 echo "This functionality can be disabled in ~/.config/rshred/rshred.conf, but some functionality will be disabled."
 echo ""
-echo "Welcome to rshred v1.0! Please enter the path of the directory or file you would like to shred."
+echo "Welcome to rshred v1.0.1! Please enter the path of the directory or file you would like to shred."
 read shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""

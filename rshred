@@ -76,7 +76,7 @@ if [[ $EUID == 0 ]]; then
     fi
 fi
 if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
-    echo "~/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
+    echo "$HOME/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $homedir/.config/rshred/
@@ -112,7 +112,7 @@ echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
 echo ""
 echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
-echo "This functionality can be disabled in ~/.config/rshred/rshred.conf, but some functionality will be disabled."
+echo "This functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled."
 echo ""
 echo "Welcome to rshred v1.0.1! Please enter the path of the directory or file you would like to shred."
 read shredvictim
@@ -193,7 +193,7 @@ echo "-v,    show progress"
 echo "-x,    do not round file sizes up to the next full block;"
 echo "-z,    add a final overwrite with zeros to hide shredding"
 echo "-p,    power off the system after shredding completes (using -l is highly reccomended when using this in case of errors)"
-echo "-l,    logs the shred operation to a file. Default location is ~/.rshred/logs/"
+echo "-l,    logs the shred operation to a file. Default location is $HOME/.rshred/logs/"
 if [[ $anylittlebad == 1 ]]; then
     echo ""
     echo "WARNING! You do NOT have write permissions in the directories listed above! -u will not work in these directories!"

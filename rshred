@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 trap "caughtsigint" INT
-unset $badfiles
-unset $baddirecs
 anybadfile=0
 anybaddirec=0
 unset $littlebad

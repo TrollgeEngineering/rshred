@@ -1,4 +1,4 @@
-## rshred v1.0.3 (Unreleased)
+## rshred v1.0.3 November 12 2025
 
 -removed calls to unset vestigial variables
 

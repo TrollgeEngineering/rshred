@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 trap "caughtsigint" INT
-unset $badfiles
-unset $baddirecs
 anybadfile=0
 anybaddirec=0
 unset $littlebad
@@ -205,7 +203,7 @@ while [[ ! $finalconfirm == YES ]]; do
     goodchar=0
     while [[ $goodchar == 0 ]]; do
         read flags
-        if echo "$flags" | grep -q '[^ fnsuvxzcplKMGT0-9\-]'; then
+        if echo "$flags" | grep -q '[^ fnsuvxzplKMGT0-9\-]'; then
            echo "error: Invalid flags. Please try again."
         else
             goodchar=1

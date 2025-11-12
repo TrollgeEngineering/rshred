@@ -1,5 +1,6 @@
 ## rshred v1.0.3 (Unreleased)
 
+-removed calls to unset vestigial variables
 -removed "c" from accepted characters in flag prompt
 
 ## rshred v1.0.2 August 9 2025

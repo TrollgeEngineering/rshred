@@ -1,5 +1,7 @@
 ## rshred v1.0.4 (Unreleased)
 
+-removed manual tempfile shredding code after shred is aborted after permission check and called shredtemps function instead 
+
 -disabled execution permission on script by default
 
 ## rshred v1.0.3 November 12 2025

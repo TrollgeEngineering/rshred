@@ -1,3 +1,7 @@
+## rshred v1.0.4 (Unreleased)
+
+-disabled execution permission on script by default
+
 ## rshred v1.0.3 November 12 2025
 
 -removed calls to unset vestigial variables

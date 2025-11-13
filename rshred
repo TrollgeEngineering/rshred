@@ -161,13 +161,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
         echo "You do not have the necessary permissions to shred the above items in $(realpath "$shredvictim"). Continue anyway? (y/N)"
         read badconfirm
         if [[ ! $badconfirm == "y" && ! $badconfirm == "Y" ]]; then
-            echo ""
-            echo "Shredding tempfile..."
-            shred -fuz -n 5 $crnttemp > /dev/null 2>&1
-            if [[ $? != "0" ]]; then
-                echo ""
-                echo "WARNING! Shredding of tempfile located at $crnttemp failed!"
-            fi
+            shredtemps
             echo ""
             echo "Shred aborted. No changes have been made."
             exit 4

@@ -250,6 +250,22 @@ while [[ ! $finalconfirm == YES ]]; do
         echo "Shred aborted. No changes were made."
         echo ""
     fi
+    if [[ $logsyes == 1 ]]; then
+        mkdir -p "$logpath" > /dev/null 2>&1
+        while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newdir == "n" && ! $newdir == "N" ) ]]; do
+            echo "error: Directory at $logpath cannot be created and/or written to. Specify different path? (Y/n)"
+            read newdir
+            if [[ ! $newdir == "n" && ! $newdir == "N" ]]; then
+                echo "Enter new path."
+                read logpath
+            fi
+            mkdir -p "$logpath" > /dev/null 2>&1
+        done
+        logpath=$(realpath "$logpath")"/"
+    fi
+    if [[ ! -w $logpath || ! -x $logpath ]]; then
+        logsyes=0
+    fi
 done
 shredstarted=1
 if [[ $logsyes != 1 ]]; then
@@ -270,8 +286,7 @@ else
 fi
 # The destruction has begun!
 if [[ $logsyes == 1 ]]; then
-    mkdir -p "$logpath" > /dev/null 2>&1
-    logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S') $(realpath $shredvictim)"
+    logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S')"
     if echo "$flags" | grep -q "v"; then
         find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$logpath"
     else
@@ -296,7 +311,7 @@ if [[ $logsyes == 1 ]]; then
         errcount=$(grep -c "failed to open for writing" "$logpath")
         shredtemps
         echo "" | tee -a "$logpath"
-        echo "Shredding of $shredvictim completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff
@@ -304,7 +319,7 @@ if [[ $logsyes == 1 ]]; then
     else
         shredtemps
         echo "" | tee -a "$logpath"
-        echo "Shredding of $shredvictim completed. No errors found." | tee -a "$logpath"
+        echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff
@@ -317,7 +332,7 @@ elif [[ $tempexist == 1 ]]; then
         errcount=$(grep -c "failed to open for writing" "$crnttemp")
         shredtemps
         echo ""
-        echo "Shredding of $shredvictim completed, but encountered $errcount errors."
+        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff
@@ -325,7 +340,7 @@ elif [[ $tempexist == 1 ]]; then
     else
         shredtemps
         echo ""
-        echo "Shredding of $shredvictim completed. No errors found."
+        echo "Shredding of $(realpath "$shredvictim") completed. No errors found."
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff

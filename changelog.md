@@ -1,4 +1,9 @@
-## rshred v1.0.4 (Unreleased)
+## rshred v1.0.4 November 15 2025
+-edited final confirmation message for clarity
+
+-added final confirmation message specific to single-file shredding
+
+-added "Shred aborted." message when final confirmation fails
 
 -removed manual tempfile shredding code after shred is aborted after permission check and called shredtemps function instead 
 

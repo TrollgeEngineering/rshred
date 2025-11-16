@@ -112,7 +112,7 @@ echo ""
 echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
 echo "This functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled."
 echo ""
-echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file you would like to shred."
+echo "Welcome to rshred v1.0.3! Please enter the path of the directory or file you would like to shred."
 read shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
@@ -243,12 +243,8 @@ while [[ ! $finalconfirm == YES ]]; do
         flaggroup+=($(echo "$flags" | grep -Eo '\-s [0-9]*[A-Z]?'))
     fi
     echo "-----------------------------------"
-    if [[ -d $shredvictim ]]; then
-        echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
-        echo "This action is irreverisible! Type \"YES\" and press enter to procceed. You may halt the shredding process at any point with Ctrl+C, but any data already shredded will be permanently lost.."
-    else
-        echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will irreversibly destroy the content of $(realpath "$shredvictim")!"
-        echo "Type \"YES\" and press enter to proceed. You may halt the shredding process at any point with Ctrl+C, but any data already shredded will be permanently lost."
+    echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
+    echo "This action is irreverisible! The shredded data CANNOT by recovered by data recovery experts! Type \"YES\" and press enter to procceed. You may halt the shredding process at any point with Ctrl+C."
     read finalconfirm
 done
 shredstarted=1

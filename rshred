@@ -112,7 +112,7 @@ echo ""
 echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
 echo "This functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled."
 echo ""
-echo "Welcome to rshred v1.0.1! Please enter the path of the directory or file you would like to shred."
+echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file you would like to shred."
 read shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
@@ -245,6 +245,11 @@ while [[ ! $finalconfirm == YES ]]; do
         echo "Type \"YES\" and press enter to proceed. You may halt the shredding process at any point with Ctrl+C, but any data already shredded will be permanently lost."
     fi
     read finalconfirm
+    if [[ ! $finalconfirm == YES ]]; then
+        echo ""
+        echo "Shred aborted. No changes were made."
+        echo ""
+    fi
 done
 shredstarted=1
 if [[ $logsyes != 1 ]]; then

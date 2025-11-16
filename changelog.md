@@ -4,6 +4,8 @@
 
 - fixed catastrophic bug preventing logging
 
+- used `realpath` to output paths in final messages instead of calling the shred target variable directly
+
 
 ## rshred v1.0.4 November 15 2025
 - edited final confirmation message for clarity

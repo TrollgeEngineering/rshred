@@ -87,7 +87,8 @@ if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
         echo "logpath=$homedir/.rshred/logs/" >> $homedir/.config/rshred/rshred.conf
         echo "" >> $homedir/.config/rshred/rshred.conf
         echo "# Path for temp files." >> $homedir/.config/rshred/rshred.conf
-        echo "tmppath=$XDG_RUNTIME_DIR" >> $homedir/.config/rshred/rshred.conf
+        echo ""
+        echo "tmppath=" >> $homedir/.config/rshred/rshred.conf
         confexist=1
         source $homedir/.config/rshred/rshred.conf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
@@ -98,6 +99,17 @@ if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
 else
     confexist=1
     source $homedir/.config/rshred/rshred.conf
+fi
+if [[ $notemp == OFF ]]; then
+    if [[ ! -w $tmppath || ! -x $tmppath ]]; then
+        if [[ -w /dev/shm && -x /dev/shm ]]; then
+            tmppath="/dev/shm"
+        elif [[ -w /dev/tmp && -x /dev/tmp ]]; then
+            tmppath="/tmp/"
+        else
+            badtemp=1
+        fi
+    fi
 fi
 which shred &>/dev/null
 if [[ $? != 0 ]]; then
@@ -112,10 +124,19 @@ echo -e "This program is distributed in the hope that it will be useful, but WIT
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
 echo ""
-echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
-echo "This functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled."
+echo -e "\e[33;40mNOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use.\e[0m"
+echo -e "\e[33;40mThis functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled.\e[0m"
 echo ""
 echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file you would like to shred."
+
+if [[ $confexist == "0" || $notemp == OFF ]]; then
+    if [[ ! -w $tmppath && ! -x $tmppath && -n $tmppath ]]; then
+        echo "WARNING: $tmppath is unable to be written to! Please check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and ececute permissions."
+    fi
+    if [[ $badtemp == 0 ]]; then
+        echo -e "\e[33;40mNOTE: This script will create and write file paths to a temporary file in "$tmppath" by default, which will be automcatically shredded by the script when no longer in use.\e[0m"
+    fi
+fi
 read shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
@@ -139,7 +160,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     if find "$shredvictim" -type f '!' -writable -print -quit 2>/dev/null | grep -q .; then
         anybadfile=1
         tempexist=1
-        crnttemp=$(mktemp)
+        crnttemp=$(mktemp -p "$tmppath")
         echo "" >> $crnttemp
         echo "FILES WITHOUT WRITE PERMISSIONS" >> $crnttemp
         echo "---------------------------------" >> $crnttemp
@@ -150,7 +171,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     if find "$shredvictim" -type d \( '!' -readable -o '!' -executable \) -print -quit 2>/dev/null | grep -q .; then
         if [[ $tempexist != 1 ]]; then
             tempexist=1
-            crnttemp=$(mktemp)
+            crnttemp=$(mktemp -p "$tmppath")
         fi
         anybaddirec=1
         echo "" >> $crnttemp
@@ -254,6 +275,9 @@ while [[ ! $finalconfirm == YES ]]; do
         echo ""
     fi
     if [[ $logsyes == 1 ]]; then
+        if [[ $confexist == 0 ]]; then
+            logpath=$homedir/.rshred/logs/
+        fi
         mkdir -p "$logpath" > /dev/null 2>&1
         while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newdir == "n" && ! $newdir == "N" ) ]]; do
             echo "error: Directory at $logpath cannot be created and/or written to. Specify different path? (Y/n)"
@@ -275,11 +299,11 @@ if [[ $logsyes != 1 ]]; then
     if [[ $tempexist == 1 ]]; then
         oldtempexist=1
         oldtemp=$crnttemp
-        crnttemp=$(mktemp)
+        crnttemp=$(mktemp -p "$tmppath")
     elif [[ $notemp == OFF ]]; then
         tempexist=1
         oldtempexist=0
-        crnttemp=$(mktemp)
+        crnttemp=$(mktemp -p "$tmppath")
     fi
 fi
 if [[ -d $shredvictim ]]; then

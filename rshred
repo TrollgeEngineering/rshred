@@ -78,13 +78,16 @@ if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $homedir/.config/rshred/
-        echo "# Disables creation of temp files in /tmp alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $homedir/.config/rshred/rshred.conf
+        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $homedir/.config/rshred/rshred.conf
         echo "" >> $homedir/.config/rshred/rshred.conf
         echo "notemp=OFF" >> $homedir/.config/rshred/rshred.conf
         echo "" >> $homedir/.config/rshred/rshred.conf
         echo "# Path for the logfiles." >> $homedir/.config/rshred/rshred.conf
         echo "" >> $homedir/.config/rshred/rshred.conf
         echo "logpath=$homedir/.rshred/logs/" >> $homedir/.config/rshred/rshred.conf
+        echo "" >> $homedir/.config/rshred/rshred.conf
+        echo "# Path for temp files." >> $homedir/.config/rshred/rshred.conf
+        echo "tmppath=$XDG_RUNTIME_DIR" >> $homedir/.config/rshred/rshred.conf
         confexist=1
         source $homedir/.config/rshred/rshred.conf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then

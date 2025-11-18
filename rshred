@@ -148,8 +148,6 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
             else
                 tmppath=/tmp
             fi
-         else
-             tmppath=/dev/shm
          fi
     fi
 fi

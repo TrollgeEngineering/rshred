@@ -16,7 +16,7 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-# Functions for SIGINT handling and shredding of temporary files.
+# Initial setup
 shredtemps() {
     if [[ $logsyes != 1 ]]; then
         logpath=""
@@ -59,7 +59,7 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
-# True start of the script.
+# True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then
     echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
     echo ""
@@ -88,7 +88,7 @@ if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
         echo "" >> $homedir/.config/rshred/rshred.conf
         echo "# Path for temp files." >> $homedir/.config/rshred/rshred.conf
         echo ""
-        echo "tmppath=" >> $homedir/.config/rshred/rshred.conf
+        echo "tmppath=/dev/shm" >> $homedir/.config/rshred/rshred.conf
         confexist=1
         source $homedir/.config/rshred/rshred.conf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
@@ -99,17 +99,6 @@ if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
 else
     confexist=1
     source $homedir/.config/rshred/rshred.conf
-fi
-if [[ $notemp == OFF ]]; then
-    if [[ ! -w $tmppath || ! -x $tmppath ]]; then
-        if [[ -w /dev/shm && -x /dev/shm ]]; then
-            tmppath="/dev/shm"
-        elif [[ -w /dev/tmp && -x /dev/tmp ]]; then
-            tmppath="/tmp/"
-        else
-            badtemp=1
-        fi
-    fi
 fi
 which shred &>/dev/null
 if [[ $? != 0 ]]; then
@@ -123,20 +112,52 @@ echo ""
 echo -e "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details."
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
-echo ""
-echo -e "\e[33;40mNOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use.\e[0m"
-echo -e "\e[33;40mThis functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled.\e[0m"
-echo ""
-echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file you would like to shred."
-
 if [[ $confexist == "0" || $notemp == OFF ]]; then
-    if [[ ! -w $tmppath && ! -x $tmppath && -n $tmppath ]]; then
-        echo "WARNING: $tmppath is unable to be written to! Please check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions."
-    fi
-    if [[ $badtemp == 0 ]]; then
-        echo -e "\e[33;40mNOTE: This script will create and write file paths to a temporary file in "$tmppath" by default, which will be automcatically shredded by the script when no longer in use.\e[0m"
+    if [[ $tmppath != /dev/shm ]]; then
+        if [[ ! -w $tmppath || ! -x $tmppath ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: $tmppath is unable to be written to!\nPlease check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions.\e[0m"
+            echo ""
+            echo "Falling back to /dev/shm."
+            if [[ ! -w /dev/shm || ! -x /dev/shm ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: /dev/shm is unable to be written to\e[0m!"
+                echo ""
+                echo "Falling back to /tmp."
+                if [[ ! -w /tmp || ! -x /tmp ]]; then
+                    echo ""
+                    echo "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                    notemp=ON
+                else
+                    tmppath=/tmp
+                fi
+            else
+                tmppath=/dev/shm
+            fi
+        fi
+    else
+        if [[ ! -w /dev/shm || ! -x /dev/shm ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: /dev/shm is unable to be written to!\e[0m"
+            echo ""
+            echo "Falling back to /tmp."
+            if [[ ! -w /tmp || ! -x /tmp ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                notemp=ON
+            else
+                tmppath=/tmp
+            fi
+         else
+             tmppath=/dev/shm
+         fi
     fi
 fi
+if [[ $confexist == "0" || $notemp == OFF ]]; then
+    echo ""
+    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $homedir/.config/rshred/rshred.conf.\e[0m"
+fi
+echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
 read shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""

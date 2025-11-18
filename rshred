@@ -131,7 +131,7 @@ echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file y
 
 if [[ $confexist == "0" || $notemp == OFF ]]; then
     if [[ ! -w $tmppath && ! -x $tmppath && -n $tmppath ]]; then
-        echo "WARNING: $tmppath is unable to be written to! Please check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and ececute permissions."
+        echo "WARNING: $tmppath is unable to be written to! Please check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions."
     fi
     if [[ $badtemp == 0 ]]; then
         echo -e "\e[33;40mNOTE: This script will create and write file paths to a temporary file in "$tmppath" by default, which will be automcatically shredded by the script when no longer in use.\e[0m"

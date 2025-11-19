@@ -352,11 +352,11 @@ if [[ $logsyes == 1 || $notemp == OFF ]]; then
 else
     find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
 fi
-if [[ $logsyes == 1 ]]; then
+if [[ $tempexist == 1 ]]; then
     echo ""
     echo "Checking for errors..."
-    if grep -q "failed to open for writing" "$logpath"; then
-        errcount=$(grep -c "failed to open for writing" "$logpath")
+    if grep -q "failed to open for writing" "$crnttemp"; then
+        errcount=$(grep -c "failed to open for writing" "$crnttemp")
         shredtemps
         echo "" | tee -a "$logpath"
         echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
@@ -373,11 +373,11 @@ if [[ $logsyes == 1 ]]; then
             poweroff
         fi
     fi
-elif [[ $tempexist == 1 ]]; then
+elif [[ $logsyes == 1 ]]; then
     echo ""
     echo "Checking for errors..."
-    if grep -q "failed to open for writing" "$crnttemp"; then
-        errcount=$(grep -c "failed to open for writing" "$crnttemp")
+    if grep -q "failed to open for writing" "$logpath"; then
+        errcount=$(grep -c "failed to open for writing" "$logpath")
         shredtemps
         echo ""
         echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."

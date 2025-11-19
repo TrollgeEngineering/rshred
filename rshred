@@ -59,8 +59,8 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
-confpath="$confpath"
-conffile="$conffile""rshred.conf"
+confpath="$homedir/.config/rshred/"
+conffile="$confpath""rshred.conf"
 # True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then
     echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
@@ -77,6 +77,8 @@ if [[ $EUID == 0 ]]; then
 fi
 if [[ ! -f $conffile ]]; then
     echo "$HOME/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
+    echo "$confpath"
+    echo "$conffile"
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $confpath
@@ -159,7 +161,7 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
     echo ""
 fi
 if [[ $confexist == 1 ]]; then
-    echo "Configuration file located at $confpath."
+    echo "Configuration file located at $conffile."
 fi
 echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
 read shredvictim

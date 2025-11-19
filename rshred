@@ -352,7 +352,7 @@ if [[ $logsyes == 1 || $notemp == OFF ]]; then
         find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} -v | tee -a "$logpath" "$crnttemp" > /dev/null 2>&1
     fi
 else
-find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
+    find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
 fi
 if [[ $logsyes == 1 ]]; then
     echo ""

@@ -59,6 +59,8 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
+confpath="$confpath"
+conffile="$conffile""rshred.conf"
 # True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then
     echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
@@ -73,32 +75,32 @@ if [[ $EUID == 0 ]]; then
         echo ""
     fi
 fi
-if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
+if [[ ! -f $conffile ]]; then
     echo "$HOME/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
-        mkdir -p $homedir/.config/rshred/
-        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "notemp=OFF" >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "# Path for the logfiles." >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "logpath=$homedir/.rshred/logs/" >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "# Path for temp files." >> $homedir/.config/rshred/rshred.conf
+        mkdir -p $confpath
+        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $conffile
+        echo "" >> $conffile
+        echo "notemp=OFF" >> $conffile
+        echo "" >> $conffile
+        echo "# Path for the logfiles." >> $conffile
+        echo "" >> $conffile
+        echo "logpath=$homedir/.rshred/logs/" >> $conffile
+        echo "" >> $conffile
+        echo "# Path for temp files." >> $conffile
         echo ""
-        echo "tmppath=/dev/shm" >> $homedir/.config/rshred/rshred.conf
+        echo "tmppath=/dev/shm" >> $conffile
         confexist=1
-        source $homedir/.config/rshred/rshred.conf
+        source $conffile
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
-            chown "$SUDO_USER":"$SUDO_USER" $homedir/.config/rshred/rshred.conf
-            chmod 660 $homedir/.config/rshred/rshred.conf
+            chown "$SUDO_USER":"$SUDO_USER" $conffile
+            chmod 660 $conffile
         fi
     fi
 else
     confexist=1
-    source $homedir/.config/rshred/rshred.conf
+    source $conffile
 fi
 which shred &>/dev/null
 if [[ $? != 0 ]]; then
@@ -116,7 +118,7 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
     if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
         if [[ ! -w $tmppath || ! -x $tmppath ]]; then
             echo ""
-            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions.\e[0m"
+            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
             echo ""
             echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
             if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
@@ -153,7 +155,11 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
 fi
 if [[ $confexist == "0" || $notemp == OFF ]]; then
     echo ""
-    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $homedir/.config/rshred/rshred.conf.\e[0m"
+    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $conffile.\e[0m"
+    echo ""
+fi
+if [[ $confexist == 1 ]]; then
+    echo "Configuration file located at $confpath."
 fi
 echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
 read shredvictim

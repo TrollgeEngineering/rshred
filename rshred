@@ -92,7 +92,7 @@ if [[ ! -f $conffile ]]; then
         echo "" >> $conffile
         echo "# Path for temp files." >> $conffile
         echo ""
-        echo "tmppath=/dev/shm" >> $conffile
+        echo "tmppath=$XDG_RUNTIME_DIR" >> $conffile
         confexist=1
         source $conffile
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then

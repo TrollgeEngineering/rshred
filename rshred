@@ -113,35 +113,35 @@ echo -e "This program is distributed in the hope that it will be useful, but WIT
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
 if [[ $confexist == "0" || $notemp == OFF ]]; then
-    if [[ $tmppath != /dev/shm ]]; then
+    if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
         if [[ ! -w $tmppath || ! -x $tmppath ]]; then
             echo ""
-            echo -e "\e[31;40mWARNING: $tmppath is unable to be written to!\nPlease check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions.\e[0m"
+            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $homedir/.config/rshred/rshred.conf to make sure tmppath is correct and has both write and execute permissions.\e[0m"
             echo ""
-            echo "Falling back to /dev/shm."
-            if [[ ! -w /dev/shm || ! -x /dev/shm ]]; then
+            echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
+            if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
                 echo ""
-                echo -e "\e[31;40mWARNING: /dev/shm is unable to be written to\e[0m!"
+                echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
                 echo ""
-                echo "Falling back to /tmp."
+                echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
                 if [[ ! -w /tmp || ! -x /tmp ]]; then
                     echo ""
-                    echo "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                    echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
                     notemp=ON
                 else
                     tmppath=/tmp
                 fi
             else
-                tmppath=/dev/shm
+                tmppath=$XDG_RUNTIME_DIR
             fi
         fi
     else
         if [[ ! -w /dev/shm || ! -x /dev/shm ]]; then
             echo ""
-            echo -e "\e[31;40mWARNING: /dev/shm is unable to be written to!\e[0m"
+            echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
             echo ""
-            echo "Falling back to /tmp."
-            if [[ ! -w /tmp || ! -x /tmp ]]; then
+            echo -e "\e[31;40mFalling back to /tmp.\e[0m"
+            if [[ ! -w /dev/tmp || ! -x /dev/tmp ]]; then
                 echo ""
                 echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
                 notemp=ON

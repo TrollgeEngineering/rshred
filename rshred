@@ -322,16 +322,16 @@ while [[ ! $finalconfirm == YES ]]; do
     fi
 done
 shredstarted=1
-if [[ $logsyes != 1 ]]; then
-    if [[ $tempexist == 1 ]]; then
-        oldtempexist=1
-        oldtemp=$crnttemp
-        crnttemp=$(mktemp -p "$tmppath")
-    elif [[ $notemp == OFF ]]; then
-        tempexist=1
-        oldtempexist=0
-        crnttemp=$(mktemp -p "$tmppath")
-    fi
+if [[ $tempexist == 1 ]]; then
+    oldtempexist=1
+    oldtemp=$crnttemp
+    crnttemp=$(mktemp -p "$tmppath")
+elif [[ $notemp == OFF ]]; then
+    tempexist=1
+    oldtempexist=0
+    crnttemp=$(mktemp -p "$tmppath")
+else
+    crnttemp=/dev/null
 fi
 if [[ -d $shredvictim ]]; then
     echo "Recursively shredding $(realpath "$shredvictim")..."
@@ -341,23 +341,19 @@ fi
 # The destruction has begun!
 if [[ $logsyes == 1 ]]; then
     logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S')"
-    if echo "$flags" | grep -q "v"; then
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$logpath"
-    else
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$logpath" 2>&1
-    fi
 else
-    if [[ $tempexist == 1 ]]; then
-        if echo "$flags" | grep -q "v"; then
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$crnttemp"
-        else
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$crnttemp" 2>&1
-        fi
-    else
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
-    fi
+    logpath=/dev/null
 fi
 errcount=0
+if [[ $logsyes == 1 || $notemp == OFF ]]; then
+    if echo "$flags" | grep -q "v"; then
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
+    else
+        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} -v | tee -a "$logpath" "$crnttemp" > /dev/null 2>&1
+    fi
+else
+find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
+fi
 if [[ $logsyes == 1 ]]; then
     echo ""
     echo "Checking for errors..."

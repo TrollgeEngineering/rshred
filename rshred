@@ -77,8 +77,6 @@ if [[ $EUID == 0 ]]; then
 fi
 if [[ ! -f $conffile ]]; then
     echo "$HOME/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
-    echo "$confpath"
-    echo "$conffile"
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $confpath

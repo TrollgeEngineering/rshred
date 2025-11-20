@@ -59,8 +59,47 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
-confpath="$homedir/.config/rshred/"
-conffile="$confpath""rshred.conf"
+loadconf() {
+    fuckyou="yes"
+    notemp=""
+    logpath=""
+    tmppath=""
+    excludedirs=()
+    stopexcl=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ $collectexcl == 1 ]]; then
+            if [[ "$line" == "$stopexcl" ]]; then
+                collectexcl=0
+            else
+                excludedirs+=("$line")
+                continue
+            fi
+        fi
+        if [[ "$line" =~ ^# ]] || [[ -z "$line" ]]; then
+            continue
+        fi
+        if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            case "$key" in
+                notemp)
+                       notemp="$value"
+                      ;;
+                logpath)
+                        logpath="$value"
+                      ;;
+                tmppath)
+                        tmppath="$value"
+                      ;;
+            esac
+        fi
+        if [[ "$line" =~ ^ExcludedDirectories[[:space:]]*gg[[:space:]]*(.*)$ ]]; then
+            collectexcl=1
+            stopexcl="${BASH_REMATCH[1]}"
+            continue
+        fi
+    done < "$HOME/.config/rshred/rshred.conf"
+}
 # True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then
     echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
@@ -91,8 +130,9 @@ if [[ ! -f $conffile ]]; then
         echo "# Path for temp files." >> $conffile
         echo ""
         echo "tmppath=$XDG_RUNTIME_DIR" >> $conffile
+        echo
         confexist=1
-        source $conffile
+        loadconf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
             chown "$SUDO_USER":"$SUDO_USER" $conffile
             chmod 660 $conffile
@@ -100,7 +140,7 @@ if [[ ! -f $conffile ]]; then
     fi
 else
     confexist=1
-    source $conffile
+    loadconf
 fi
 which shred &>/dev/null
 if [[ $? != 0 ]]; then
@@ -162,7 +202,7 @@ if [[ $confexist == 1 ]]; then
     echo "Configuration file located at $conffile."
 fi
 echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
-read shredvictim
+read -r shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
     echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."

@@ -59,8 +59,9 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
+confpath="$homedir/.config/rshred/"
+conffile="$confpath""rshred.conf"
 loadconf() {
-    fuckyou="yes"
     notemp=""
     logpath=""
     tmppath=""
@@ -98,7 +99,7 @@ loadconf() {
             stopexcl="${BASH_REMATCH[1]}"
             continue
         fi
-    done < "$HOME/.config/rshred/rshred.conf"
+    done < "$conffile"
 }
 # True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then

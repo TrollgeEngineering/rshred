@@ -1,10 +1,12 @@
-## rshred v1.1.0 (Unreleased)
+## rshred v2.0.0 (Unreleased)
 
 - included warning about invalid logging directory
 
 - fixed catastrophic bug preventing logging
 
 - used `realpath` to output paths in final messages instead of calling the shred target variable directly
+
+-redesigned config loading mechanism from `source` to a `while` loop
 
 
 ## rshred v1.0.4 November 15 2025

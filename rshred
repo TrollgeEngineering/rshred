@@ -93,6 +93,9 @@ loadconf() {
                 ExcludeConfig)
                               yesexclude="$value"
                       ;;
+                ExcludePrompt)
+                              exclprompt="$value"
+                      ;;
             esac
         fi
         if [[ "$line" =~ ^ExcludedDirectories[[:space:]]*\<\<[[:space:]]*(.*)$ ]]; then
@@ -136,6 +139,10 @@ if [[ ! -f $conffile ]]; then
         echo "# Enables the exclusion of directories set below." >> $conffile
         echo "" >> $conffile
         echo "ExcludeConfig=ON" >> $conffile
+        echo "" >> $conffile
+        echo "# Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis." >> $conffile
+        echo "" >> $conffile
+        echo "ExcludePrompt=OFF" >> $conffile
         echo "" >> $conffile
         echo "# Paths of directories you always want to exclude from shredding." >> $conffile
         echo "# Replace \"END_OF_DIRS\" at the beginning and end of the list with something that is NOT the name of any of the directories you want to exclude." >> $conffile
@@ -337,14 +344,23 @@ while [[ ! $finalconfirm == YES ]]; do
         flaggroup+=($(echo "$flags" | grep -Eo '\-s [0-9]*[A-Z]?'))
     fi
     if [[ $exclprompt == ON && -d $shredvictim ]]; then
-        if [[ $yesexcliude == ON ]]; then
-            promptdirs=("${excludedirs[@]}")
-        else
             promptdirs=()
-        fi
         echo "Please enter the full paths any directories you would like to exclude from the shredding process. Press ENTER after each path."
         echo "Once you're done, just leave the field blank and hit ENTER. If you have exclusion of directories from config file enable, the ones you enter here will be added on."
-        read -ra
+        while IFS= read -r item; do
+            if [[ -z "$item" ]]; then
+                break
+            fi
+            if [[ ! -d "$item" ]]; then
+                echo "error: $item is not a valid directory path."
+                continue
+            fi
+            promptdirs+=("$item")
+        done
+        if [[ ${#promptdirs[@]} != 0 ]]; then
+            excludedirs+=("${promptdirs[@]}")
+        fi
+    fi
     echo "-----------------------------------"
     if [[ -d $shredvictim ]]; then
         echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"

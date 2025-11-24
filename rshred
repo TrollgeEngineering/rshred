@@ -355,7 +355,7 @@ while [[ ! $finalconfirm == YES ]]; do
                 echo "error: $item is not a valid directory path."
                 continue
             fi
-            promptdirs+=("$item")
+            promptdirs+=("$(realpath "$item")")
         done
         if [[ ${#promptdirs[@]} != 0 ]]; then
             excludedirs+=("${promptdirs[@]}")

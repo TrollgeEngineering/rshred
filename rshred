@@ -211,12 +211,12 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
             fi
         fi
     else
-        if [[ ! -w /dev/shm || ! -x /dev/shm ]]; then
+        if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
             echo ""
             echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
             echo ""
             echo -e "\e[31;40mFalling back to /tmp.\e[0m"
-            if [[ ! -w /dev/tmp || ! -x /dev/tmp ]]; then
+            if [[ ! -w /tmp || ! -x /tmp ]]; then
                 echo ""
                 echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
                 notemp=ON

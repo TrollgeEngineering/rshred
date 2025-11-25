@@ -144,8 +144,10 @@ if [[ ! -f $conffile ]]; then
         echo "" >> $conffile
         echo "ExcludePrompt=OFF" >> $conffile
         echo "" >> $conffile
-        echo "# Paths of directories you always want to exclude from shredding." >> $conffile
+        echo "# Full paths of directories you always want to exclude from shredding." >> $conffile
         echo "# Replace \"END_OF_DIRS\" at the beginning and end of the list with something that is NOT the name of any of the directories you want to exclude." >> $conffile
+        echo "# Put one directory per line." >> $conffile
+        echo "# Do not put quotes around directory paths, even if they contain spaces." >> $conffile
         echo "" >> $conffile
         echo 'ExcludedDirectories << END_OF_DIRS' >> $conffile
         echo "END_OF_DIRS" >> $conffile

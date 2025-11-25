@@ -1,12 +1,27 @@
 ## rshred v2.0.0 (Unreleased)
+- added directory exclusion
 
-- included warning about invalid logging directory
+- added custom tempfile selection
 
-- fixed catastrophic bug preventing logging
+- added warning about invalid logging directory
+
+- added SIGHUP to valid signals to be trapped
+
+- added option to recursively delete folders within shredding directory
+
+- prioritized tempfiles instead of logfiles for error scanning
+
+- unified config file locations under two variables
+
+- added color to some errors and warnings
+
+- fixed bug preventing logging
 
 - used `realpath` to output paths in final messages instead of calling the shred target variable directly
 
--redesigned config loading mechanism from `source` to a `while` loop
+- clarified valid options and defaults in config file
+
+- redesigned config loading mechanism from `source` to a `while` loop
 
 
 ## rshred v1.0.4 November 15 2025

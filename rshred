@@ -16,6 +16,8 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
+rversion="v2.0.0"
+
 # Initial setup
 shredtemps() {
     if [[ $oldtempexist == 1 ]]; then
@@ -235,7 +237,7 @@ if [[ $confexist == 1 ]]; then
     echo ""
     echo "Configuration file located at $conffile."
 fi
-echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
+echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 read -r shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""

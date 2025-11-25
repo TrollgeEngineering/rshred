@@ -63,6 +63,7 @@ loadconf() {
     logpath=""
     tmppath=""
     excludedirs=()
+    badexclude=()
     stopexcl=""
     collectexcl=0
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -70,8 +71,13 @@ loadconf() {
             if [[ "$line" == "$stopexcl" ]]; then
                 collectexcl=0
             else
-                excludedirs+=("$line")
-                continue
+                if [[ -d "$line" ]]; then
+                    excludedirs+=("$line")
+                    continue
+                else
+                    badexclude+=("$line")
+                    continue
+                fi
             fi
         fi
         if [[ "$line" =~ ^# ]] || [[ -z "$line" ]]; then
@@ -95,6 +101,9 @@ loadconf() {
                       ;;
                 ExcludePrompt)
                               exclprompt="$value"
+                      ;;
+                RemoveDirectories)
+                                  rmvdir="$value"
                       ;;
             esac
         fi
@@ -151,6 +160,10 @@ if [[ ! -f $conffile ]]; then
         echo "" >> $conffile
         echo 'ExcludedDirectories << END_OF_DIRS' >> $conffile
         echo "END_OF_DIRS" >> $conffile
+        echo "" >> $conffile
+        echo "# Also attempt to remove all empty directories after shred if the -u flag is used." >> $conffile
+        echo "" >> $conffile
+        echo "RemoveDirectories=OFF" >> $conffile
         confexist=1
         loadconf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
@@ -183,7 +196,7 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
             echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
             if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
                 echo ""
-                echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+                echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
                 echo ""
                 echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
                 if [[ ! -w /tmp || ! -x /tmp ]]; then
@@ -219,6 +232,7 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
     echo ""
 fi
 if [[ $confexist == 1 ]]; then
+    echo ""
     echo "Configuration file located at $conffile."
 fi
 echo "Welcome to rshred v1.1.0! Please enter the file/directory you would like to shred."
@@ -428,9 +442,6 @@ if [[ $yesexclude == ON ]]; then
     done
     unset 'exdirs[${#exdirs[@]}-1]'
 fi
-echo $yesexclude
-echo ${#exdirs[@]}
-echo "${exdirs[@]}"
 if [[ $logsyes == 1 || $notemp == OFF ]]; then
     if echo "$flags" | grep -q "v"; then
         if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
@@ -450,6 +461,13 @@ else
         find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
     else
         find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
+    fi
+fi
+if [[ ( $rmvdir == "ON" ) && ( echo "${flaggroup[@]}" | grep -q "l" ) ]]; then
+    echo "Removing empty directories..." | tee -a "$logpath"
+    rm -r "$shredvictim" > "$logpath" 2>&1
+    if [[ $? != 0 ]]; then
+        echo "WARNING! Some directories within $(realpath "$shredvictim") were unable to be removed!"
     fi
 fi
 if [[ $tempexist == 1 ]]; then

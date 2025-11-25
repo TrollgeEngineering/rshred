@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-trap "caughtsigint" INT
+trap "caughtsig" INT HUP
 anybadfile=0
 anybaddirec=0
 unset $littlebad
@@ -35,13 +35,13 @@ shredtemps() {
         fi
     fi
 }
-caughtsigint() {
+caughtsig() {
     echo ""
-    echo "Caught SIGINT!"
+    echo "Caught interrupt signal!"
     if [[ $logsyes == 1 && $shredstarted == 1 ]]; then
         echo ""
         echo "Appending to logfile..."
-        echo -e "------------------------\nCaught SIGINT at $(date).\n------------------------" >> "$logpath"
+        echo -e "------------------------\nCaught interrupt at $(date).\n------------------------" >> "$logpath"
         if [[ $? != 0 ]]; then
             echo "WARNING! Appending to logfile failed!"
         fi
@@ -87,13 +87,13 @@ loadconf() {
             key="${BASH_REMATCH[1]}"
             value="${BASH_REMATCH[2]}"
             case "$key" in
-                notemp)
+                NoTemp)
                        notemp="$value"
                       ;;
-                logpath)
+                LogPath)
                         logpath="$value"
                       ;;
-                tmppath)
+                TempPath)
                         tmppath="$value"
                       ;;
                 ExcludeConfig)
@@ -133,23 +133,23 @@ if [[ ! -f $conffile ]]; then
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $confpath
-        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $conffile
+        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
-        echo "notemp=OFF" >> $conffile
+        echo "NoTemp=OFF" >> $conffile
         echo "" >> $conffile
-        echo "# Path for the logfiles." >> $conffile
+        echo "# Full path for the logfiles. Default: $homedir/.rshred/logs/" >> $conffile
         echo "" >> $conffile
-        echo "logpath=$homedir/.rshred/logs/" >> $conffile
+        echo "LogPath=$homedir/.rshred/logs/" >> $conffile
         echo "" >> $conffile
-        echo "# Path for temp files." >> $conffile
+        echo "# Full path for temp files. Default: '$XDG_RUNTIME_DIR' " >> $conffile
         echo "" >> $conffile
-        echo "tmppath=$XDG_RUNTIME_DIR" >> $conffile
+        echo "TempPath=$XDG_RUNTIME_DIR" >> $conffile
         echo "" >> $conffile
-        echo "# Enables the exclusion of directories set below." >> $conffile
+        echo "# Enables the exclusion of directories set below. (ON/OFF) Default: ON" >> $conffile
         echo "" >> $conffile
         echo "ExcludeConfig=ON" >> $conffile
         echo "" >> $conffile
-        echo "# Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis." >> $conffile
+        echo "# Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
         echo "ExcludePrompt=OFF" >> $conffile
         echo "" >> $conffile
@@ -161,7 +161,7 @@ if [[ ! -f $conffile ]]; then
         echo 'ExcludedDirectories << END_OF_DIRS' >> $conffile
         echo "END_OF_DIRS" >> $conffile
         echo "" >> $conffile
-        echo "# Also attempt to remove all empty directories after shred if the -u flag is used." >> $conffile
+        echo "# Also attempt to remove all empty directories after shred if the -u flag is used. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
         echo "RemoveDirectories=OFF" >> $conffile
         confexist=1

@@ -393,7 +393,7 @@ while [[ ! $finalconfirm == YES ]]; do
     fi
     if [[ $logsyes == 1 ]]; then
         if [[ $confexist == 0 ]]; then
-            logpath=$homedir/.rshred/logs/
+            logpath="$homedir/.rshred/logs/"
         fi
         mkdir -p "$logpath" > /dev/null 2>&1
         while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newdir == "n" && ! $newdir == "N" ) ]]; do

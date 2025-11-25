@@ -435,7 +435,7 @@ else
     logpath="/dev/null"
 fi
 errcount=0
-if [[ $yesexclude == ON ]]; then
+if [[ $yesexclude == ON && ${#excludedirs[@]} != 0 ]]; then
     exdirs=()
     for blkdir in "${excludedirs[@]}"; do
     exdirs+=(-wholename "$blkdir" -o)
@@ -463,11 +463,14 @@ else
         find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
     fi
 fi
-if [[ ( $rmvdir == "ON" ) && ( echo "${flaggroup[@]}" | grep -q "l" ) ]]; then
-    echo "Removing empty directories..." | tee -a "$logpath"
-    rm -r "$shredvictim" > "$logpath" 2>&1
-    if [[ $? != 0 ]]; then
-        echo "WARNING! Some directories within $(realpath "$shredvictim") were unable to be removed!"
+if [[ $rmvdir == "ON" ]]; then
+    if echo "${flaggroup[@]}" | grep -q "u"; then
+        echo "Removing empty directories..." | tee -a "$logpath"
+        if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
+            find "$(realpath "$shredvictim")" -type d \( "${exdirs[@]}" \) -prune -o -type d -print0 | xargs -0 rm 2>&1 | tee -a "$logpath"
+        else
+            rm -r "$shredvictim" | tee -a "$logpath"
+        fi
     fi
 fi
 if [[ $tempexist == 1 ]]; then

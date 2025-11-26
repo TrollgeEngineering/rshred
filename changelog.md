@@ -1,4 +1,4 @@
-## rshred v2.0.0 (Unreleased)
+## rshred v2.0.0 November 25 2025
 - added directory exclusion
 
 - added custom tempfile selection

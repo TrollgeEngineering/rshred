@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-trap "caughtsigint" INT
+trap "caughtsig" INT HUP
 anybadfile=0
 anybaddirec=0
 unset $littlebad
@@ -16,11 +16,10 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-# Functions for SIGINT handling and shredding of temporary files.
+rversion="v2.0.0"
+
+# Initial setup
 shredtemps() {
-    if [[ $logsyes != 1 ]]; then
-        logpath=""
-    fi
     if [[ $oldtempexist == 1 ]]; then
         echo ""
         echo "Shredding tempfile at $oldtemp..."
@@ -38,13 +37,13 @@ shredtemps() {
         fi
     fi
 }
-caughtsigint() {
+caughtsig() {
     echo ""
-    echo "Caught SIGINT!"
+    echo "Caught interrupt signal!"
     if [[ $logsyes == 1 && $shredstarted == 1 ]]; then
         echo ""
         echo "Appending to logfile..."
-        echo -e "------------------------\nCaught SIGINT at $(date).\n------------------------" >> "$logpath"
+        echo -e "------------------------\nCaught interrupt at $(date).\n------------------------" >> "$logpath"
         if [[ $? != 0 ]]; then
             echo "WARNING! Appending to logfile failed!"
         fi
@@ -59,7 +58,65 @@ if [[ -n $SUDO_USER ]]; then
 else
     homedir="$HOME"
 fi
-# True start of the script.
+confpath="$homedir/.config/rshred/"
+conffile="$confpath""rshred.conf"
+loadconf() {
+    notemp=""
+    logpath=""
+    tmppath=""
+    excludedirs=()
+    badexclude=()
+    stopexcl=""
+    collectexcl=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ $collectexcl == 1 ]]; then
+            if [[ "$line" == "$stopexcl" ]]; then
+                collectexcl=0
+            else
+                if [[ -d "$line" ]]; then
+                    excludedirs+=("$line")
+                    continue
+                else
+                    badexclude+=("$line")
+                    continue
+                fi
+            fi
+        fi
+        if [[ "$line" =~ ^# ]] || [[ -z "$line" ]]; then
+            continue
+        fi
+        if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            case "$key" in
+                NoTemp)
+                       notemp="$value"
+                      ;;
+                LogPath)
+                        logpath="$value"
+                      ;;
+                TempPath)
+                        tmppath="$value"
+                      ;;
+                ExcludeConfig)
+                              yesexclude="$value"
+                      ;;
+                ExcludePrompt)
+                              exclprompt="$value"
+                      ;;
+                RemoveDirectories)
+                                  rmvdir="$value"
+                      ;;
+            esac
+        fi
+        if [[ "$line" =~ ^ExcludedDirectories[[:space:]]*\<\<[[:space:]]*(.*)$ ]]; then
+            collectexcl=1
+            stopexcl="${BASH_REMATCH[1]}"
+            continue
+        fi
+    done < "$conffile"
+}
+# True start. First possibility of an echo statement visible to the user in the terminal.
 if [[ $EUID == 0 ]]; then
     echo "WARNING! This script is being run as ROOT! This can be incredibly dangerous if you don't know what you're doing!"
     echo ""
@@ -73,28 +130,52 @@ if [[ $EUID == 0 ]]; then
         echo ""
     fi
 fi
-if [[ ! -f $homedir/.config/rshred/rshred.conf ]]; then
+if [[ ! -f $conffile ]]; then
     echo "$HOME/.config/rshred/rshred.conf does not exist. Would you like to create it? (Y/n)"
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
-        mkdir -p $homedir/.config/rshred/
-        echo "# Disables creation of temp files in /tmp alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF)" >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "notemp=OFF" >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "# Path for the logfiles." >> $homedir/.config/rshred/rshred.conf
-        echo "" >> $homedir/.config/rshred/rshred.conf
-        echo "logpath=$homedir/.rshred/logs/" >> $homedir/.config/rshred/rshred.conf
+        mkdir -p $confpath
+        echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF) Default: OFF" >> $conffile
+        echo "" >> $conffile
+        echo "NoTemp=OFF" >> $conffile
+        echo "" >> $conffile
+        echo "# Full path for the logfiles. Default: $homedir/.rshred/logs/" >> $conffile
+        echo "" >> $conffile
+        echo "LogPath=$homedir/.rshred/logs/" >> $conffile
+        echo "" >> $conffile
+        echo "# Full path for temp files. Default: '$XDG_RUNTIME_DIR' " >> $conffile
+        echo "" >> $conffile
+        echo "TempPath=$XDG_RUNTIME_DIR" >> $conffile
+        echo "" >> $conffile
+        echo "# Enables the exclusion of directories set below. (ON/OFF) Default: ON" >> $conffile
+        echo "" >> $conffile
+        echo "ExcludeConfig=ON" >> $conffile
+        echo "" >> $conffile
+        echo "# Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis. (ON/OFF) Default: OFF" >> $conffile
+        echo "" >> $conffile
+        echo "ExcludePrompt=OFF" >> $conffile
+        echo "" >> $conffile
+        echo "# Full paths of directories you always want to exclude from shredding." >> $conffile
+        echo "# Replace \"END_OF_DIRS\" at the beginning and end of the list with something that is NOT the name of any of the directories you want to exclude." >> $conffile
+        echo "# Put one directory per line." >> $conffile
+        echo "# Do not put quotes around directory paths, even if they contain spaces." >> $conffile
+        echo "" >> $conffile
+        echo 'ExcludedDirectories << END_OF_DIRS' >> $conffile
+        echo "END_OF_DIRS" >> $conffile
+        echo "" >> $conffile
+        echo "# Also attempt to remove all empty directories after shred if the -u flag is used. (ON/OFF) Default: OFF" >> $conffile
+        echo "" >> $conffile
+        echo "RemoveDirectories=OFF" >> $conffile
         confexist=1
-        source $homedir/.config/rshred/rshred.conf
+        loadconf
         if [[ -n $SUDO_USER && $EUID == 0 ]]; then
-            chown "$SUDO_USER":"$SUDO_USER" $homedir/.config/rshred/rshred.conf
-            chmod 660 $homedir/.config/rshred/rshred.conf
+            chown "$SUDO_USER":"$SUDO_USER" $conffile
+            chmod 660 $conffile
         fi
     fi
 else
     confexist=1
-    source $homedir/.config/rshred/rshred.conf
+    loadconf
 fi
 which shred &>/dev/null
 if [[ $? != 0 ]]; then
@@ -108,12 +189,56 @@ echo ""
 echo -e "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details."
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
-echo ""
-echo "NOTE: This script will create and write file paths to a temporary file in /tmp by default, which will be automcatically shredded by the script when no longer in use."
-echo "This functionality can be disabled in $HOME/.config/rshred/rshred.conf, but some functionality will be disabled."
-echo ""
-echo "Welcome to rshred v1.0.4! Please enter the path of the directory or file you would like to shred."
-read shredvictim
+if [[ $confexist == "0" || $notemp == OFF ]]; then
+    if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
+        if [[ ! -w $tmppath || ! -x $tmppath ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
+            echo ""
+            echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
+            if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
+                echo ""
+                echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
+                if [[ ! -w /tmp || ! -x /tmp ]]; then
+                    echo ""
+                    echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                    notemp=ON
+                else
+                    tmppath=/tmp
+                fi
+            else
+                tmppath=$XDG_RUNTIME_DIR
+            fi
+        fi
+    else
+        if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+            echo ""
+            echo -e "\e[31;40mFalling back to /tmp.\e[0m"
+            if [[ ! -w /tmp || ! -x /tmp ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                notemp=ON
+            else
+                tmppath=/tmp
+            fi
+         fi
+    fi
+fi
+if [[ $confexist == "0" || $notemp == OFF ]]; then
+    echo ""
+    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $conffile.\e[0m"
+    echo ""
+fi
+if [[ $confexist == 1 ]]; then
+    echo ""
+    echo "Configuration file located at $conffile."
+fi
+echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
+read -r shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
     echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."
@@ -136,7 +261,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     if find "$shredvictim" -type f '!' -writable -print -quit 2>/dev/null | grep -q .; then
         anybadfile=1
         tempexist=1
-        crnttemp=$(mktemp)
+        crnttemp=$(mktemp -p "$tmppath")
         echo "" >> $crnttemp
         echo "FILES WITHOUT WRITE PERMISSIONS" >> $crnttemp
         echo "---------------------------------" >> $crnttemp
@@ -147,7 +272,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     if find "$shredvictim" -type d \( '!' -readable -o '!' -executable \) -print -quit 2>/dev/null | grep -q .; then
         if [[ $tempexist != 1 ]]; then
             tempexist=1
-            crnttemp=$(mktemp)
+            crnttemp=$(mktemp -p "$tmppath")
         fi
         anybaddirec=1
         echo "" >> $crnttemp
@@ -236,6 +361,24 @@ while [[ ! $finalconfirm == YES ]]; do
     if echo "$flags" | grep -q "s"; then
         flaggroup+=($(echo "$flags" | grep -Eo '\-s [0-9]*[A-Z]?'))
     fi
+    if [[ $exclprompt == ON && -d $shredvictim ]]; then
+            promptdirs=()
+        echo "Please enter the full paths any directories you would like to exclude from the shredding process. Press ENTER after each path."
+        echo "Once you're done, just leave the field blank and hit ENTER. If you have exclusion of directories from config file enable, the ones you enter here will be added on."
+        while IFS= read -r item; do
+            if [[ -z "$item" ]]; then
+                break
+            fi
+            if [[ ! -d "$item" ]]; then
+                echo "error: $item is not a valid directory path."
+                continue
+            fi
+            promptdirs+=("$(realpath "$item")")
+        done
+        if [[ ${#promptdirs[@]} != 0 ]]; then
+            excludedirs+=("${promptdirs[@]}")
+        fi
+    fi
     echo "-----------------------------------"
     if [[ -d $shredvictim ]]; then
         echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
@@ -250,18 +393,37 @@ while [[ ! $finalconfirm == YES ]]; do
         echo "Shred aborted. No changes were made."
         echo ""
     fi
+    if [[ $logsyes == 1 ]]; then
+        if [[ $confexist == 0 ]]; then
+            logpath="$homedir/.rshred/logs/"
+        fi
+        mkdir -p "$logpath" > /dev/null 2>&1
+        while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newdir == "n" && ! $newdir == "N" ) ]]; do
+            echo "error: Directory at $logpath cannot be created and/or written to. Specify different path? (Y/n)"
+            read newdir
+            if [[ ! $newdir == "n" && ! $newdir == "N" ]]; then
+                echo "Enter new path."
+                read logpath
+            fi
+            mkdir -p "$logpath" > /dev/null 2>&1
+        done
+        logpath=$(realpath "$logpath")"/"
+    fi
+    if [[ ! -w $logpath || ! -x $logpath ]]; then
+        logsyes=0
+    fi
 done
 shredstarted=1
-if [[ $logsyes != 1 ]]; then
-    if [[ $tempexist == 1 ]]; then
-        oldtempexist=1
-        oldtemp=$crnttemp
-        crnttemp=$(mktemp)
-    elif [[ $notemp == OFF ]]; then
-        tempexist=1
-        oldtempexist=0
-        crnttemp=$(mktemp)
-    fi
+if [[ $tempexist == 1 ]]; then
+    oldtempexist=1
+    oldtemp=$crnttemp
+    crnttemp=$(mktemp -p "$tmppath")
+elif [[ $notemp == OFF ]]; then
+    tempexist=1
+    oldtempexist=0
+    crnttemp=$(mktemp -p "$tmppath")
+else
+    crnttemp=/dev/null
 fi
 if [[ -d $shredvictim ]]; then
     echo "Recursively shredding $(realpath "$shredvictim")..."
@@ -270,54 +432,78 @@ else
 fi
 # The destruction has begun!
 if [[ $logsyes == 1 ]]; then
-    mkdir -p "$logpath" > /dev/null 2>&1
-    logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S') $(realpath $shredvictim)"
+    logpath+="rshred log $(date +'%Y-%m-%d %H-%M-%S')"
+else
+    logpath="/dev/null"
+fi
+errcount=0
+if [[ $yesexclude == ON && ${#excludedirs[@]} != 0 ]]; then
+    exdirs=()
+    for blkdir in "${excludedirs[@]}"; do
+        exdirs+=(-wholename "$blkdir" -o)
+    done
+    unset 'exdirs[${#exdirs[@]}-1]'
+fi
+if [[ $logsyes == 1 || $notemp == OFF ]]; then
     if echo "$flags" | grep -q "v"; then
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$logpath"
+        if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
+            find "$(realpath "$shredvictim")" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
+        else
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
+        fi
     else
-        find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$logpath" 2>&1
+        if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
+            find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} -v | tee -a "$logpath" "$crnttemp" > /dev/null 2>&1
+        else
+            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} -v | tee -a "$logpath" "$crnttemp" > /dev/null 2>&1
+        fi
     fi
 else
-    if [[ $tempexist == 1 ]]; then
-        if echo "$flags" | grep -q "v"; then
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} 2>&1 | stdbuf -o0 tee -a "$crnttemp"
-        else
-            find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 stdbuf -oL -eL shred ${flaggroup[@]} -v > "$crnttemp" 2>&1
-        fi
+    if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
+        find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
     else
         find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]}
     fi
 fi
-errcount=0
-if [[ $logsyes == 1 ]]; then
-    echo ""
-    echo "Checking for errors..."
-    if grep -q "failed to open for writing" "$logpath"; then
-        errcount=$(grep -c "failed to open for writing" "$logpath")
-        shredtemps
-        echo "" | tee -a "$logpath"
-        echo "Shredding of $shredvictim completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
-        if [[ $powerdown == 1 ]]; then
-            echo "Shutting down host..."
-            poweroff
-        fi
-    else
-        shredtemps
-        echo "" | tee -a "$logpath"
-        echo "Shredding of $shredvictim completed. No errors found." | tee -a "$logpath"
-        if [[ $powerdown == 1 ]]; then
-            echo "Shutting down host..."
-            poweroff
+if [[ $rmvdir == "ON" ]]; then
+    if echo "${flaggroup[@]}" | grep -q "u"; then
+        echo "Removing empty directories..." | tee -a "$logpath"
+        if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
+            find "$(realpath "$shredvictim")" -type d \( "${exdirs[@]}" \) -prune -o -type d -print0 | xargs -0 rm 2>&1 | tee -a "$logpath"
+        else
+            rm -r "$shredvictim" | tee -a "$logpath"
         fi
     fi
-elif [[ $tempexist == 1 ]]; then
+fi
+if [[ $tempexist == 1 ]]; then
     echo ""
     echo "Checking for errors..."
     if grep -q "failed to open for writing" "$crnttemp"; then
         errcount=$(grep -c "failed to open for writing" "$crnttemp")
         shredtemps
+        echo "" | tee -a "$logpath"
+        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    else
+        shredtemps
+        echo "" | tee -a "$logpath"
+        echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
+        if [[ $powerdown == 1 ]]; then
+            echo "Shutting down host..."
+            poweroff
+        fi
+    fi
+elif [[ $logsyes == 1 ]]; then
+    echo ""
+    echo "Checking for errors..."
+    if grep -q "failed to open for writing" "$logpath"; then
+        errcount=$(grep -c "failed to open for writing" "$logpath")
+        shredtemps
         echo ""
-        echo "Shredding of $shredvictim completed, but encountered $errcount errors."
+        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff
@@ -325,7 +511,7 @@ elif [[ $tempexist == 1 ]]; then
     else
         shredtemps
         echo ""
-        echo "Shredding of $shredvictim completed. No errors found."
+        echo "Shredding of $(realpath "$shredvictim") completed. No errors found."
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff

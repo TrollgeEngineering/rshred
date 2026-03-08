@@ -189,18 +189,36 @@ echo ""
 echo -e "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details."
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
-if [[ $confexist == "0" || $notemp == OFF ]]; then
-    if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
-        if [[ ! -w $tmppath || ! -x $tmppath ]]; then
-            echo ""
-            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
-            echo ""
-            echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
-            if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
+if [[ $confexist == "1" ]]; then
+    if [[ $notemp == "OFF" ]]; then
+        if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
+            if [[ ! -w $tmppath || ! -x $tmppath ]]; then
                 echo ""
-                echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
+                echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
                 echo ""
-                echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
+                echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
+                if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
+                    echo ""
+                    echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
+                    echo ""
+                    echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
+                    if [[ ! -w /tmp || ! -x /tmp ]]; then
+                        echo ""
+                        echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                        notemp=ON
+                    else
+                        tmppath=/tmp
+                    fi
+                else
+                    tmppath=$XDG_RUNTIME_DIR
+                fi
+            fi
+        else
+            if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+                echo ""
+                echo -e "\e[31;40mFalling back to /tmp.\e[0m"
                 if [[ ! -w /tmp || ! -x /tmp ]]; then
                     echo ""
                     echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
@@ -208,29 +226,30 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
                 else
                     tmppath=/tmp
                 fi
-            else
-                tmppath=$XDG_RUNTIME_DIR
-            fi
+             fi
+        fi
+    fi
+else
+    if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
+        echo ""
+        echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+        echo ""
+        echo -e "\e[31;40mFalling back to /tmp.\e[0m"
+        if [[ ! -w /tmp || ! -x /tmp ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+            notemp=ON
+        else
+            tmppath=/tmp
         fi
     else
-        if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
-            echo ""
-            echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
-            echo ""
-            echo -e "\e[31;40mFalling back to /tmp.\e[0m"
-            if [[ ! -w /tmp || ! -x /tmp ]]; then
-                echo ""
-                echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
-                notemp=ON
-            else
-                tmppath=/tmp
-            fi
-         fi
+        tmppath="$XDG_RUNTIME_DIR"
     fi
 fi
+
 if [[ $confexist == "0" || $notemp == OFF ]]; then
     echo ""
-    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $conffile.\e[0m"
+    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $(realpath $tmppath). This can be disabled in $conffile.\e[0m"
     echo ""
 fi
 if [[ $confexist == 1 ]]; then

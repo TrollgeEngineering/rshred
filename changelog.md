@@ -1,3 +1,7 @@
+## rshred (Unreleased)
+
+-fixed default temp folder when no config file is set
+
 ## rshred v2.0.0 November 25 2025
 - added directory exclusion
 

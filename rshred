@@ -261,11 +261,14 @@ fi
 
 echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 if [[ $checkupdates == "ON" ]]; then
-    lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt)"
+    echo "Checking for updates..."
+    lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt > /dev/null 2>&1 )"
     if [[ $? != 0 ]]; then
         echo "ERROR: failed to check for updates."
     elif [[ $rversion != $lateststable ]]; then
         echo "Version $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred"
+    else
+        echo "rshred is up to date."
     fi
 fi
 read -r shredvictim

@@ -16,7 +16,7 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-rversion="v2.0.0"
+rversion="v2.1.0"
 
 # Initial setup
 shredtemps() {
@@ -258,19 +258,33 @@ if [[ $confexist == 1 ]]; then
     echo ""
     echo "Configuration file located at $conffile."
 fi
-
-echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 if [[ $checkupdates == "ON" ]]; then
-    echo "Checking for updates..."
-    lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt > /dev/null 2>&1 )"
-    if [[ $? != 0 ]]; then
-        echo "ERROR: failed to check for updates."
-    elif [[ $rversion != $lateststable ]]; then
-        echo "Version $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred"
+    if command -v curl > /dev/null 2>&1; then
+        echo "Checking for updates..."
+        echo ""
+        lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt 2>/dev/null )"
+        if [[ $? != 0 ]]; then
+            echo "ERROR: Unable to retrive latest version number from server."
+        elif [[ $rversion != $lateststable ]]; then
+            echo -e "\e[0;32mVersion $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred.\e[0m"
+        else
+            echo "rshred is up to date."
+        fi
+    elif command -v wget > /dev/null 2>&1; then
+        lateststable="$(wget -qO- https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt > /dev/null 2>&1 )"
+        if [[ $? != 0 ]]; then
+            echo "ERROR: Unable to retrive latest version number from server."
+        elif [[ $rversion != $lateststable ]]; then
+            echo -e "\e[0;32mVersion $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred.\e[0m"
+        else
+            echo "rshred is up to date."
+        fi
     else
-        echo "rshred is up to date."
+        echo "ERROR: Either curl or wget is needed for checking updates."
     fi
+    echo ""
 fi
+echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 read -r shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""

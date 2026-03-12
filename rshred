@@ -21,19 +21,37 @@ rversion="v2.1.0"
 # Initial setup
 shredtemps() {
     if [[ $oldtempexist == 1 ]]; then
-        echo ""
-        echo "Shredding tempfile at $oldtemp..."
-        shred -fuz -n 5 $oldtemp > /dev/null 2>&1
-        if [[ $? != 0 ]]; then
-            echo "WARNING! Shredding of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+        if [[ $shredtemps == "ON" || $confexist == 0 ]]; then
+            echo ""
+            echo "Shredding tempfile at $oldtemp..."
+            shred -fuz -n 5 $oldtemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+            fi
+        else
+            echo ""
+            echo "Removing tempfile at $oldtemp..."
+            rm -f $oldtemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Removal of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+            fi
         fi
     fi
     if [[ $tempexist == 1 ]]; then
-        echo ""
-        echo "Shredding tempfile at $crnttemp..."
-        shred -fuz -n 5 $crnttemp > /dev/null 2>&1
-        if [[ $? != 0 ]]; then
-            echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+        if [[ $shredtemps == "ON" || $confexist == 0 ]]; then
+            echo ""
+            echo "Shredding tempfile at $crnttemp..."
+            shred -fuz -n 5 $crnttemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+            fi
+        else
+            echo ""
+            echo "Removing tempfile at $crnttemp..."
+            rm -f $crnttemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+            fi
         fi
     fi
 }
@@ -110,6 +128,9 @@ loadconf() {
                 CheckForUpdates)
                                 checkupdates="$value"
                       ;;
+                ShredTemps)
+                           shredtemps="$value"
+                      ;;
             esac
         fi
         if [[ "$line" =~ ^ExcludedDirectories[[:space:]]*\<\<[[:space:]]*(.*)$ ]]; then
@@ -145,6 +166,10 @@ if [[ ! -f $conffile ]]; then
         echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
         echo "NoTemp=OFF" >> $conffile
+        echo "" >> $conffile
+        echo "# Shred any temporary files after they are done being used. Highly reccomended to disable if temporary files are being written to an SSD. (ON/OFF) Default: ON" >> $conffile
+        echo "" >> $conffile
+        echo "ShredTemps=ON" >> $conffile
         echo "" >> $conffile
         echo "# Full path for the logfiles. Default: $homedir/.rshred/logs/" >> $conffile
         echo "" >> $conffile

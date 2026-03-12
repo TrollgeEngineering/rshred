@@ -1,4 +1,4 @@
-## rshred (Unreleased)
+## rshred v2.1.0 March 11 2026
 
 -added update detection
 

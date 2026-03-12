@@ -1,3 +1,11 @@
+## rshred v2.1.0 March 11 2026
+
+-added update detection
+
+-added option to remove tempfiles instead of shredding them
+
+-fixed default temp folder when no config file is set
+
 ## rshred v2.0.0 November 25 2025
 - added directory exclusion
 

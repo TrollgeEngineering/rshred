@@ -16,24 +16,42 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-rversion="v2.0.0"
+rversion="v2.1.0"
 
 # Initial setup
 shredtemps() {
     if [[ $oldtempexist == 1 ]]; then
-        echo ""
-        echo "Shredding tempfile at $oldtemp..."
-        shred -fuz -n 5 $oldtemp > /dev/null 2>&1
-        if [[ $? != 0 ]]; then
-            echo "WARNING! Shredding of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+        if [[ $shredtemps == "ON" || $confexist == 0 ]]; then
+            echo ""
+            echo "Shredding tempfile at $oldtemp..."
+            shred -fuz -n 5 $oldtemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+            fi
+        else
+            echo ""
+            echo "Removing tempfile at $oldtemp..."
+            rm -f $oldtemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Removal of tempfile located at $oldtemp failed!" | tee -a "$logpath"
+            fi
         fi
     fi
     if [[ $tempexist == 1 ]]; then
-        echo ""
-        echo "Shredding tempfile at $crnttemp..."
-        shred -fuz -n 5 $crnttemp > /dev/null 2>&1
-        if [[ $? != 0 ]]; then
-            echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+        if [[ $shredtemps == "ON" || $confexist == 0 ]]; then
+            echo ""
+            echo "Shredding tempfile at $crnttemp..."
+            shred -fuz -n 5 $crnttemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+            fi
+        else
+            echo ""
+            echo "Removing tempfile at $crnttemp..."
+            rm -f $crnttemp > /dev/null 2>&1
+            if [[ $? != 0 ]]; then
+                echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+            fi
         fi
     fi
 }
@@ -107,6 +125,12 @@ loadconf() {
                 RemoveDirectories)
                                   rmvdir="$value"
                       ;;
+                CheckForUpdates)
+                                checkupdates="$value"
+                      ;;
+                ShredTemps)
+                           shredtemps="$value"
+                      ;;
             esac
         fi
         if [[ "$line" =~ ^ExcludedDirectories[[:space:]]*\<\<[[:space:]]*(.*)$ ]]; then
@@ -135,9 +159,17 @@ if [[ ! -f $conffile ]]; then
     read confcreate
     if [[ ! $confcreate == n && ! $confcreate == N ]]; then
         mkdir -p $confpath
+        echo "# Checks for updates on boot. (ON/OFF) Default: OFF" >> $conffile
+        echo "" >> $conffile
+        echo "CheckForUpdates=OFF" >> $conffile
+        echo "" >> $conffile
         echo "# Disables creation of temp files alltogether. Will disable functionality for recursive permission checking, error detection, and error counting. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
         echo "NoTemp=OFF" >> $conffile
+        echo "" >> $conffile
+        echo "# Shred any temporary files after they are done being used. Highly reccomended to disable if temporary files are being written to an SSD. (ON/OFF) Default: ON" >> $conffile
+        echo "" >> $conffile
+        echo "ShredTemps=ON" >> $conffile
         echo "" >> $conffile
         echo "# Full path for the logfiles. Default: $homedir/.rshred/logs/" >> $conffile
         echo "" >> $conffile
@@ -177,11 +209,6 @@ else
     confexist=1
     loadconf
 fi
-which shred &>/dev/null
-if [[ $? != 0 ]]; then
-    echo "error: The shred command was not able to be accessed. Please check your \$PATH variable for errors."
-    exit 99
-fi
 echo "rshred Copyright 2025 TrollgeEngineering"
 echo ""
 echo -e "This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation,\neither version 3 of the License, or (at your option) any later version."
@@ -189,18 +216,36 @@ echo ""
 echo -e "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details."
 echo ""
 echo "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>."
-if [[ $confexist == "0" || $notemp == OFF ]]; then
-    if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
-        if [[ ! -w $tmppath || ! -x $tmppath ]]; then
-            echo ""
-            echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
-            echo ""
-            echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
-            if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
+if [[ $confexist == "1" ]]; then
+    if [[ $notemp == "OFF" ]]; then
+        if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
+            if [[ ! -w $tmppath || ! -x $tmppath ]]; then
                 echo ""
-                echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
+                echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
                 echo ""
-                echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
+                echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
+                if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then
+                    echo ""
+                    echo -e "\e[31;40mWARNING: '$XDG_RUNTIME_DIR' is unable to be written to!\e[0m"
+                    echo ""
+                    echo -e "\e[31;40mFalling back to /tmp! /tmp is sometimes NOT ram-backed!\e[0m"
+                    if [[ ! -w /tmp || ! -x /tmp ]]; then
+                        echo ""
+                        echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+                        notemp=ON
+                    else
+                        tmppath=/tmp
+                    fi
+                else
+                    tmppath=$XDG_RUNTIME_DIR
+                fi
+            fi
+        else
+            if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
+                echo ""
+                echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+                echo ""
+                echo -e "\e[31;40mFalling back to /tmp.\e[0m"
                 if [[ ! -w /tmp || ! -x /tmp ]]; then
                     echo ""
                     echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
@@ -208,34 +253,61 @@ if [[ $confexist == "0" || $notemp == OFF ]]; then
                 else
                     tmppath=/tmp
                 fi
-            else
-                tmppath=$XDG_RUNTIME_DIR
-            fi
+             fi
+        fi
+    fi
+else
+    if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
+        echo ""
+        echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
+        echo ""
+        echo -e "\e[31;40mFalling back to /tmp.\e[0m"
+        if [[ ! -w /tmp || ! -x /tmp ]]; then
+            echo ""
+            echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
+            notemp=ON
+        else
+            tmppath=/tmp
         fi
     else
-        if [[ ! -w "$XDG_RUNTIME_DIR" || ! -x "$XDG_RUNTIME_DIR" ]]; then
-            echo ""
-            echo -e "\e[31;40mWARNING: $XDG_RUNTIME_DIR is unable to be written to!\e[0m"
-            echo ""
-            echo -e "\e[31;40mFalling back to /tmp.\e[0m"
-            if [[ ! -w /tmp || ! -x /tmp ]]; then
-                echo ""
-                echo -e "\e[31;40mWARNING: /tmp is unable to be written to! Temporary files will be disabled along with some functionality!\e[0m"
-                notemp=ON
-            else
-                tmppath=/tmp
-            fi
-         fi
+        tmppath="$XDG_RUNTIME_DIR"
     fi
 fi
+
 if [[ $confexist == "0" || $notemp == OFF ]]; then
     echo ""
-    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $tmppath. This can be disabled in $conffile.\e[0m"
+    echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $(realpath $tmppath). This can be disabled in $conffile.\e[0m"
     echo ""
 fi
 if [[ $confexist == 1 ]]; then
     echo ""
     echo "Configuration file located at $conffile."
+fi
+if [[ $checkupdates == "ON" ]]; then
+    if command -v curl > /dev/null 2>&1; then
+        echo "Checking for updates..."
+        echo ""
+        lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt 2>/dev/null )"
+        if [[ $? != 0 ]]; then
+            echo "ERROR: Unable to retrive latest version number from server."
+        elif [[ $rversion != $lateststable ]]; then
+            echo -e "\e[0;32mVersion $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred.\e[0m"
+        else
+            echo "rshred is up to date."
+        fi
+    elif command -v wget > /dev/null 2>&1; then
+        lateststable="$(wget -qO- https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt > /dev/null 2>&1 )"
+        if [[ $? != 0 ]]; then
+            echo "ERROR: Unable to retrive latest version number from server."
+        elif [[ $rversion != $lateststable ]]; then
+            echo -e "\e[0;32mVersion $lateststable of rshred is available! Get it at https://codeberg.org/TrollgeEngineering/rshred.\e[0m"
+        else
+            echo "rshred is up to date."
+        fi
+    else
+        echo "ERROR: Either curl or wget is needed for checking updates."
+    fi
+    echo ""
 fi
 echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 read -r shredvictim

@@ -514,7 +514,7 @@ if [[ $yesexclude == ON && ${#excludedirs[@]} != 0 ]]; then
     for blkdir in "${excludedirs[@]}"; do
         exdirs+=(-wholename "$blkdir" -o)
     done
-    unset 'exdirs[${#exdirs[@]}-1]'
+    unset exdirs[${#exdirs[@]}-1]
 fi
 if [[ $logsyes == 1 || $notemp == OFF ]]; then
     if echo "$flags" | grep -q "v"; then

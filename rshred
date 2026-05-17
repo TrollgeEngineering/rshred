@@ -311,7 +311,6 @@ if [[ $checkupdates == "ON" ]]; then
 fi
 echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 read -r shredvictim
-shredvictim="$(realpath "$shredvictim")"
 if [ ! -e "$shredvictim" ]; then
     echo ""
     echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."
@@ -327,6 +326,7 @@ elif [[ ! -d "$shredvictim" && ! -w "$shredvictim" ]]; then
     echo "error: You do not have write permissions on $shredvictim. Using sudo rshred may help. Use with extreme caution."
     exit 3
 fi
+shredvictim="$(realpath "$shredvictim")"
 # If the user has specified a directory to be shredded, and they have the right permissions on the directory, then their permissions on the files and directories within must also be correct.
 if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     echo ""

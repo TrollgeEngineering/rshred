@@ -16,7 +16,7 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-rversion="v2.1.0"
+rversion="v2.1.1"
 
 # Initial setup
 shredtemps() {
@@ -221,7 +221,7 @@ if [[ $confexist == "1" ]]; then
         if [[ $tmppath != $XDG_RUNTIME_DIR ]]; then
             if [[ ! -w $tmppath || ! -x $tmppath ]]; then
                 echo ""
-                echo -e "\e[31;40mWARNING: Cutsom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
+                echo -e "\e[31;40mWARNING: Custom temp directory $tmppath is unable to be written to!\nPlease check $conffile to make sure tmppath is correct and has both write and execute permissions.\e[0m"
                 echo ""
                 echo -e "\e[31;40mFalling back to $XDG_RUNTIME_DIR.\e[0m"
                 if [[ ! -w $XDG_RUNTIME_DIR || ! -x $XDG_RUNTIME_DIR ]]; then

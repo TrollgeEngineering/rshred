@@ -470,19 +470,21 @@ while [[ ! $finalconfirm == YES ]]; do
             logpath="$homedir/.rshred/logs/"
         fi
         mkdir -p "$logpath" > /dev/null 2>&1
-        while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newdir == "n" && ! $newdir == "N" ) ]]; do
+        while [[ ( ! -w $logpath || ! -x $logpath ) && ( ! $newlogdirquestion == "n" && ! $newlogdirquestion == "N" ) ]]; do
             echo "error: Directory at $logpath cannot be created and/or written to. Specify different path? (Y/n)"
-            read newdir
-            if [[ ! $newdir == "n" && ! $newdir == "N" ]]; then
+            read newlogdirquestion
+            if [[ ! $newlogdirquestion == "n" && ! $newlogdirquestion == "N" ]]; then
                 echo "Enter new path."
                 read logpath
+            else
+                echo ""
+                echo "Logging will be disabled."
+                logsyes=0
+                break
             fi
             mkdir -p "$logpath" > /dev/null 2>&1
         done
         logpath=$(realpath "$logpath")"/"
-    fi
-    if [[ ! -w $logpath || ! -x $logpath ]]; then
-        logsyes=0
     fi
 done
 shredstarted=1

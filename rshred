@@ -554,7 +554,11 @@ if [[ $tempexist == 1 ]]; then
         errcount=$(grep -c "failed to open for writing" "$crnttemp")
         shredtemps
         echo "" | tee -a "$logpath"
-        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        if [[ $logsyes == 1 ]]; then
+            echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        else
+            echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."
+        fi
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
             poweroff
@@ -564,7 +568,7 @@ if [[ $tempexist == 1 ]]; then
         echo "" | tee -a "$logpath"
         echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
-            echo "Shutting down host..."
+            echo "Shutting down host..." | tee -a "$logpath"
             poweroff
         fi
     fi
@@ -575,17 +579,17 @@ elif [[ $logsyes == 1 ]]; then
         errcount=$(grep -c "failed to open for writing" "$logpath")
         shredtemps
         echo ""
-        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."
+        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
-            echo "Shutting down host..."
+            echo "Shutting down host..." | tee -a "$logpath"
             poweroff
         fi
     else
         shredtemps
         echo ""
-        echo "Shredding of $(realpath "$shredvictim") completed. No errors found."
+        echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
-            echo "Shutting down host..."
+            echo "Shutting down host..." | tee -a "$logpath"
             poweroff
         fi
     fi

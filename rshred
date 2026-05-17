@@ -311,6 +311,7 @@ if [[ $checkupdates == "ON" ]]; then
 fi
 echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
 read -r shredvictim
+shredvictim="$(realpath "$shredvictim")"
 if [ ! -e "$shredvictim" ]; then
     echo ""
     echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."
@@ -323,13 +324,13 @@ if [[ -d "$shredvictim" && ( ! -r "$shredvictim" || ! -x "$shredvictim" ) ]]; th
     exit 2
 # Shred only requires write permissions to shred files.
 elif [[ ! -d "$shredvictim" && ! -w "$shredvictim" ]]; then
-    echo "error: You do not have write permissions on $(realpath "$shredvictim"). Using sudo rshred may help. Use with extreme caution."
+    echo "error: You do not have write permissions on $shredvictim. Using sudo rshred may help. Use with extreme caution."
     exit 3
 fi
 # If the user has specified a directory to be shredded, and they have the right permissions on the directory, then their permissions on the files and directories within must also be correct.
 if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     echo ""
-    echo "Scanning for files without write permissions in $(realpath "$shredvictim")..."
+    echo "Scanning for files without write permissions in $shredvictim..."
     if find "$shredvictim" -type f '!' -writable -print -quit 2>/dev/null | grep -q .; then
         anybadfile=1
         tempexist=1
@@ -340,7 +341,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
         find "$shredvictim" -type f '!' -writable 2>/dev/null 1>>$crnttemp
         echo "-----------------------------------" >> $crnttemp
     fi
-    echo "Scanning for directories without read/execute permissions in $(realpath "$shredvictim")..."
+    echo "Scanning for directories without read/execute permissions in $shredvictim..."
     if find "$shredvictim" -type d \( '!' -readable -o '!' -executable \) -print -quit 2>/dev/null | grep -q .; then
         if [[ $tempexist != 1 ]]; then
             tempexist=1
@@ -355,7 +356,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
     if [[ $anybaddirec == "1" || $anybadfile == "1" ]]; then
         cat $crnttemp
         echo ""
-        echo "You do not have the necessary permissions to shred the above items in $(realpath "$shredvictim"). Continue anyway? (y/N)"
+        echo "You do not have the necessary permissions to shred the above items in $shredvictim. Continue anyway? (y/N)"
         read badconfirm
         if [[ ! $badconfirm == "y" && ! $badconfirm == "Y" ]]; then
             shredtemps
@@ -366,7 +367,7 @@ if [[ -d "$shredvictim" && ( $confexist == "0" || $notemp == OFF ) ]]; then
         echo ""
     fi
 fi
-echo "Scanning for unremovable files in $(realpath "$shredvictim")..."
+echo "Scanning for unremovable files in $shredvictim..."
 if find "$shredvictim" -type d '!' -writable -print -quit 2>/dev/null | grep -q .; then
     anylittlebad=1
     echo "-----------------------------"
@@ -453,10 +454,10 @@ while [[ ! $finalconfirm == YES ]]; do
     fi
     echo "-----------------------------------"
     if [[ -d $shredvictim ]]; then
-        echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within $(realpath "$shredvictim")!"
+        echo "WARNING!! You are about to run shred on $shredvictim with the flags ${flaggroup[@]}! This will RECURSIVELY DESTROY all files within ${shredvictim}!"
         echo "This action is irreverisible! Type \"YES\" and press enter to procceed. You may halt the shredding process at any point with Ctrl+C, but any data already shredded will be permanently lost."
     else
-        echo "WARNING!! You are about to run shred on $(realpath "$shredvictim") with the flags ${flaggroup[@]}! This will irreversibly destroy the content of $(realpath "$shredvictim")!"
+        echo "WARNING!! You are about to run shred on $shredvictim with the flags ${flaggroup[@]}! This will irreversibly destroy the content of ${shredvictim}!"
         echo "Type \"YES\" and press enter to proceed. You may halt the shredding process at any point with Ctrl+C, but any data already shredded will be permanently lost."
     fi
     read finalconfirm
@@ -500,9 +501,9 @@ else
     crnttemp=/dev/null
 fi
 if [[ -d $shredvictim ]]; then
-    echo "Recursively shredding $(realpath "$shredvictim")..."
+    echo "Recursively shredding ${shredvictim}..."
 else
-    echo "Shredding $(realpath "$shredvictim")..."
+    echo "Shredding ${shredvictim}..."
 fi
 # The destruction has begun!
 if [[ $logsyes == 1 ]]; then
@@ -521,7 +522,7 @@ fi
 if [[ $logsyes == 1 || $notemp == OFF ]]; then
     if echo "$flags" | grep -q "v"; then
         if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
-            find "$(realpath "$shredvictim")" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
+            find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type f -print0 | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
         else
             find "$shredvictim" -type f -print0 2>/dev/null | xargs -0 shred ${flaggroup[@]} 2>&1 | tee -a "$logpath" "$crnttemp"
         fi
@@ -543,7 +544,7 @@ if [[ $rmvdir == "ON" ]]; then
     if echo "${flaggroup[@]}" | grep -q "u"; then
         echo "Removing empty directories..." | tee -a "$logpath"
         if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
-            find "$(realpath "$shredvictim")" -type d \( "${exdirs[@]}" \) -prune -o -type d -print0 | xargs -0 rm 2>&1 | tee -a "$logpath"
+            find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type d -print0 | xargs -0 rm 2>&1 | tee -a "$logpath"
         else
             rm -r "$shredvictim" | tee -a "$logpath"
         fi
@@ -557,9 +558,9 @@ if [[ $tempexist == 1 ]]; then
         shredtemps
         echo "" | tee -a "$logpath"
         if [[ $logsyes == 1 ]]; then
-            echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+            echo "Shredding of $shredvictim completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
         else
-            echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors."
+            echo "Shredding of $shredvictim completed, but encountered $errcount errors."
         fi
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..."
@@ -568,7 +569,7 @@ if [[ $tempexist == 1 ]]; then
     else
         shredtemps
         echo "" | tee -a "$logpath"
-        echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
+        echo "Shredding of $shredvictim completed. No errors found." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..." | tee -a "$logpath"
             poweroff
@@ -581,7 +582,7 @@ elif [[ $logsyes == 1 ]]; then
         errcount=$(grep -c "failed to open for writing" "$logpath")
         shredtemps
         echo ""
-        echo "Shredding of $(realpath "$shredvictim") completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
+        echo "Shredding of $shredvictim completed, but encountered $errcount errors. Please check $logpath for more info." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..." | tee -a "$logpath"
             poweroff
@@ -589,7 +590,7 @@ elif [[ $logsyes == 1 ]]; then
     else
         shredtemps
         echo ""
-        echo "Shredding of $(realpath "$shredvictim") completed. No errors found." | tee -a "$logpath"
+        echo "Shredding of $shredvictim completed. No errors found." | tee -a "$logpath"
         if [[ $powerdown == 1 ]]; then
             echo "Shutting down host..." | tee -a "$logpath"
             poweroff

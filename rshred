@@ -515,7 +515,12 @@ errcount=0
 if [[ $yesexclude == ON && ${#excludedirs[@]} != 0 ]]; then
     exdirs=()
     for blkdir in "${excludedirs[@]}"; do
-        exdirs+=(-wholename "$blkdir" -o)
+        sanitized=${blkdir//\\/\\\\}
+        sanitized=${sanitized//\*/\\\*}
+        sanitized=${sanitized//\?/\\\?}
+        sanitized=${sanitized//\[/\\\[}
+        sanitized=${sanitized//\]/\\\]}
+        exdirs+=(-wholename "$sanitized" -o)
     done
     unset exdirs[${#exdirs[@]}-1]
 fi
@@ -589,6 +594,7 @@ if [[ $rmvdir == "ON" ]]; then
         fi
     fi
 fi
+echo ${!unique[@]}
 if [[ $tempexist == 1 ]]; then
     echo ""
     echo "Checking for errors..."
@@ -639,3 +645,4 @@ else
     echo ""
     echo "Shredding of $shredvictim completed."
 fi
+echo "${exdirs[@]}"

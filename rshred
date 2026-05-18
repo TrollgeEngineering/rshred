@@ -583,9 +583,9 @@ if [[ $rmvdir == "ON" ]]; then
                 if [[ -z "${unique[$dir]}" ]]; then
                     printf '%s\0' "$dir"
                 fi
-            done < <(find "$shredvictim" -depth -type d -print0 2>/dev/null) | xargs -0 rmdir 2>/dev/null
+            done < <(find "$shredvictim" -depth -type d -print0 2>/dev/null) | xargs -0 rmdir 2>&1 | tee -a "$logpath"
         else
-            rm -r "$shredvictim"
+            rm -r "$shredvictim" | tee -a "$logpath"
         fi
     fi
 fi

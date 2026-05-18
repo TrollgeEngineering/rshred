@@ -543,10 +543,49 @@ fi
 if [[ $rmvdir == "ON" ]]; then
     if echo "${flaggroup[@]}" | grep -q "u"; then
         echo "Removing empty directories..." | tee -a "$logpath"
+        readarray -d '' filesremaining < <(find "$shredvictim" -type f -print0)
+        declare -A unique
+        if [[ ${#filesremaining[@]} != 0 ]]; then
+            for file in "${filesremaining[@]}"; do
+                crntfile="$file"
+                while true; do
+                    parent="${crntfile%/*}"
+                    if [[ -z $parent ]]; then
+                        parent="/"
+                    fi
+                    unique["$parent"]=1
+                    if [[ $parent == "/" || $parent == "$shredvictim" ]]; then
+                        break
+                    fi
+                    crntfile="$parent"
+                done
+            done
+        fi
         if [[ $yesexclude == ON && ${#exdirs[@]} != 0 ]]; then
-            find "$shredvictim" -type d \( "${exdirs[@]}" \) -prune -o -type d -print0 | xargs -0 rm 2>&1 | tee -a "$logpath"
+            for dir in "${excludedirs[@]}"; do
+                unique["$dir"]=1
+                crntdir="$dir"
+                while true; do
+                    parent="${crntdir%/*}"
+                    if [[ -z $parent ]]; then
+                        parent="/"
+                    fi
+                    unique["$parent"]=1
+                    if [[ $parent == "/" || $parent == "$shredvictim" ]]; then
+                        break
+                    fi
+                    crntdir="$parent"
+                done
+            done
+        fi
+        if [[ ${#unique[@]} != 0 ]]; then
+            while IFS= read -r -d '' dir; do
+                if [[ -z "${unique[$dir]}" ]]; then
+                    printf '%s\0' "$dir"
+                fi
+            done < <(find "$shredvictim" -depth -type d -print0 2>/dev/null) | xargs -0 rmdir 2>/dev/null
         else
-            rm -r "$shredvictim" | tee -a "$logpath"
+            rm -r "$shredvictim"
         fi
     fi
 fi

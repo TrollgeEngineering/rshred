@@ -116,10 +116,10 @@ loadconf() {
                 TempPath)
                         tmppath="$value"
                       ;;
-                ExcludeConfig)
+                ExcludeConfigDirs)
                               yesexclude="$value"
                       ;;
-                ExcludePrompt)
+                ExcludeDirsPrompt)
                               exclprompt="$value"
                       ;;
                 RemoveDirectories)
@@ -181,11 +181,11 @@ if [[ ! -f $conffile ]]; then
         echo "" >> $conffile
         echo "# Enables the exclusion of directories set below. (ON/OFF) Default: ON" >> $conffile
         echo "" >> $conffile
-        echo "ExcludeConfig=ON" >> $conffile
+        echo "ExcludeConfigDirs=ON" >> $conffile
         echo "" >> $conffile
         echo "# Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis. (ON/OFF) Default: OFF" >> $conffile
         echo "" >> $conffile
-        echo "ExcludePrompt=OFF" >> $conffile
+        echo "ExcludeDirsPrompt=OFF" >> $conffile
         echo "" >> $conffile
         echo "# Full paths of directories you always want to exclude from shredding." >> $conffile
         echo "# Replace \"END_OF_DIRS\" at the beginning and end of the list with something that is NOT the name of any of the directories you want to exclude." >> $conffile

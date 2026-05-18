@@ -50,7 +50,7 @@ shredtemps() {
             echo "Removing tempfile at $crnttemp..."
             rm -f $crnttemp > /dev/null 2>&1
             if [[ $? != 0 ]]; then
-                echo "WARNING! Shredding of tempfile located at $crnttemp failed!" | tee -a "$logpath"
+                echo "WARNING! Removal of tempfile located at $crnttemp failed!" | tee -a "$logpath"
             fi
         fi
     fi

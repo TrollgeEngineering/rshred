@@ -16,7 +16,7 @@ unset $crnttemp
 unset $logpath
 unset $notemp
 
-rversion="v2.1.1"
+rversion="v3.0.0-alpha"
 
 # Initial setup
 shredtemps() {

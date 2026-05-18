@@ -1,3 +1,23 @@
+## rshred v3.0.0 May 18 2026
+
+- fixed directory exclusion
+
+- fixed "cutsom" typo
+
+- fixed error detection after shredding
+
+- renamed variables for clarity
+
+- restructured log path validation
+
+- unified `realpath` calls
+
+- edited warning about faliure to remove tempfiles
+
+- updated keys in config file for clarity
+
+- fixed bug that prevented certain symbols from being able to be in an excluded directory 
+
 ## rshred v2.1.0 March 11 2026
 
 -added update detection

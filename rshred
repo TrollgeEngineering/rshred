@@ -347,7 +347,7 @@ if [[ "$checkupdates" == "ON" ]]; then
     echo ""
 fi
 echo "Welcome to rshred $rversion! Please enter the file/directory you would like to shred."
-read -r shredvictim
+IFS= read -r shredvictim
 if [ ! -e "$shredvictim" ]; then
     echo ""
     echo "error: The directory/file \"$shredvictim\" does not exist. Please check to make sure the file exists and/or you have the right path."

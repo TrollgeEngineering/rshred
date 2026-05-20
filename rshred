@@ -2,28 +2,19 @@
 trap "caughtsig" INT HUP
 # rshred version
 rversion="v3.0.0-alpha"
-# First variables.
-anybadfile=0
-anybaddirec=0
-unset $littlebad
-anylittlebad=0
-shrederrors=0
-tempexist=0
-oldtempexist=0
-tempexist=0
-logsyes=0
-powerdown=0
-unset $oldtemp
-unset $crnttemp
-unset $logpath
-unset $notemp
 # Set home directory.
 if [[ -n $SUDO_USER ]]; then
     homedir="/home/$SUDO_USER"
 else
     homedir="$HOME"
 fi
-# Helper functions.
+# Default script variables.
+confpath="$homedir/.config/rshred/"
+conffile="$confpath""rshred.conf"
+tempexist=0
+logsyes=0
+shredstarted=0
+# Default config variables.
 notemp=OFF
 checkupdates=OFF
 shredtemps=ON
@@ -34,6 +25,7 @@ exclprompt=OFF
 excludedirs=()
 rmvdir=ON
 stopexcl=END_OF_DIRS
+# Helper functions.
 shredtemps() {
     if [[ $oldtempexist == 1 ]]; then
         if [[ "$shredtemps" == "ON" ]]; then
@@ -86,8 +78,6 @@ caughtsig() {
     echo "Quitting..."
     exit 0
 }
-confpath="$homedir/.config/rshred/"
-conffile="$confpath""rshred.conf"
 createconf() {
     mkdir -p "$confpath"
     echo "Generated with rshred ${rversion}." > "$conffile"

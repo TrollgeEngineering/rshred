@@ -34,7 +34,7 @@ yesexclude=ON
 exclprompt=OFF
 excludedirs=()
 rmvdir=ON
-endofdirs=END_OF_DIRS
+stopexcl=END_OF_DIRS
 shredtemps() {
     if [[ $oldtempexist == 1 ]]; then
         if [[ "$shredtemps" == "ON" || $confexist == 0 ]]; then
@@ -126,7 +126,7 @@ createconf() {
     echo "# Put one directory per line." >> "$conffile"
     echo "# Do not put quotes around directory paths, even if they contain spaces." >> "$conffile"
     echo "" >> "$conffile"
-    echo 'ExcludedDirectories << ${stopexcl}' >> "$conffile"
+    echo "ExcludedDirectories << ${stopexcl}" >> "$conffile"
     printf '%s\n' "${excludedirs[@]}" >> "$conffile"
     echo "${stopexcl}" >> "$conffile"
     echo "" >> "$conffile"
@@ -328,9 +328,16 @@ if [[ $confexist == "0" || "$notemp" == OFF ]]; then
     echo -e "\e[33;40mNOTE: Tempfiles containing filepaths will be written to $(realpath $tmppath). This can be disabled in $conffile.\e[0m"
     echo ""
 fi
+if [[ "${#badexclude[@]}" != 0 ]]; then
+    echo -e "\e[31;40mWARNING: The following directory paths from $conffile are invalid, and are unable to be excluded:\e[0m"
+    echo ""
+    printf '%s\n' "${badexclude[@]}"
+    echo ""
+fi
 if [[ -e $conffile ]]; then
     echo ""
     echo "Configuration file located at $conffile."
+    echo ""
 fi
 if [[ "$checkupdates" == "ON" ]]; then
     if command -v curl > /dev/null 2>&1; then

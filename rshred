@@ -318,6 +318,7 @@ if [[ -e $conffile ]]; then
 fi
 if [[ "$checkupdates" == "ON" ]]; then
     if command -v curl > /dev/null 2>&1; then
+        echo ""
         echo "Checking for updates..."
         echo ""
         lateststable="$(curl -fsSL https://codeberg.org/TrollgeEngineering/rshred/raw/branch/main/version.txt 2>/dev/null )"

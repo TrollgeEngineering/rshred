@@ -1,5 +1,11 @@
 ## rshred v3.0.0 May 18 2026
 
+- warned about invalid directory paths placed in config file
+
+- remove IFS for inital path input to protect leading and trailing whitespace
+
+- added config file versioning
+
 - fixed directory exclusion
 
 - fixed "cutsom" typo

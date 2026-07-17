@@ -125,7 +125,7 @@ createconf() {
     echo "" >> "$conffile"
     echo "# Also attempt to remove all empty directories after shred if the -u flag is used. (ON/OFF) Default: OFF" >> "$conffile"
     echo "" >> "$conffile"
-    echo "RemoveDirectories=OFF" >> "$conffile"
+    echo "RemoveDirectories=${rmvdir}" >> "$conffile"
     if [[ -n "$SUDO_USER" && $EUID == 0 ]]; then
         chown "$SUDO_USER":"$SUDO_USER" "$conffile"
         chmod 660 "$conffile"

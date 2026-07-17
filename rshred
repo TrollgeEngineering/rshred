@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 trap "caughtsig" INT HUP
 # rshred version
-rversion="v3.0.1"
+rversion="v3.0.2"
 # Set home directory.
 if [[ -n $SUDO_USER ]]; then
     homedir="/home/$SUDO_USER"

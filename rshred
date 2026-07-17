@@ -679,5 +679,5 @@ elif [[ $logsyes == 1 ]]; then
     fi
 else
     echo ""
-    echo "Shredding of $shredvictim completed."
+    echo "Shredding of $shredvictim completed, but error checking was skipped due to both logging and temp files being disabled."
 fi

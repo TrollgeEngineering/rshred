@@ -23,7 +23,7 @@ tmppath="$XDG_RUNTIME_DIR"
 yesexclude=ON
 exclprompt=OFF
 excludedirs=()
-rmvdir=ON
+rmvdir=OFF
 stopexcl=END_OF_DIRS
 # Helper functions.
 shredtemps() {

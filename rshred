@@ -485,9 +485,6 @@ while [[ "$finalconfirm" != YES ]]; do
             fi
             promptdirs+=("$(realpath "$item")")
         done
-        if [[ ${#promptdirs[@]} != 0 ]]; then
-            excludedirs+=("${promptdirs[@]}")
-        fi
     fi
     echo "-----------------------------------"
     if [[ -d "$shredvictim" ]]; then
@@ -524,6 +521,10 @@ while [[ "$finalconfirm" != YES ]]; do
     fi
 done
 shredstarted=1
+if [[ ${#promptdirs[@]} != 0 ]]; then
+    excludedirs+=("${promptdirs[@]}")
+    yesexclude="ON"
+fi
 if [[ $tempexist == 1 ]]; then
     oldtempexist=1
     oldtemp="$crnttemp"

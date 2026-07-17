@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 trap "caughtsig" INT HUP
 # rshred version
-rversion="v3.0.0-alpha"
+rversion="v3.0.1"
 # Set home directory.
 if [[ -n $SUDO_USER ]]; then
     homedir="/home/$SUDO_USER"
@@ -23,7 +23,7 @@ tmppath="$XDG_RUNTIME_DIR"
 yesexclude=ON
 exclprompt=OFF
 excludedirs=()
-rmvdir=ON
+rmvdir=OFF
 stopexcl=END_OF_DIRS
 # Helper functions.
 shredtemps() {
@@ -125,7 +125,7 @@ createconf() {
     echo "" >> "$conffile"
     echo "# Also attempt to remove all empty directories after shred if the -u flag is used. (ON/OFF) Default: OFF" >> "$conffile"
     echo "" >> "$conffile"
-    echo "RemoveDirectories=OFF" >> "$conffile"
+    echo "RemoveDirectories=${rmvdir}" >> "$conffile"
     if [[ -n "$SUDO_USER" && $EUID == 0 ]]; then
         chown "$SUDO_USER":"$SUDO_USER" "$conffile"
         chmod 660 "$conffile"
@@ -485,9 +485,6 @@ while [[ "$finalconfirm" != YES ]]; do
             fi
             promptdirs+=("$(realpath "$item")")
         done
-        if [[ ${#promptdirs[@]} != 0 ]]; then
-            excludedirs+=("${promptdirs[@]}")
-        fi
     fi
     echo "-----------------------------------"
     if [[ -d "$shredvictim" ]]; then
@@ -502,6 +499,7 @@ while [[ "$finalconfirm" != YES ]]; do
         echo ""
         echo "Shred aborted. No changes were made."
         echo ""
+        continue
     fi
     if [[ $logsyes == 1 ]]; then
         mkdir -p "$logpath" > /dev/null 2>&1
@@ -523,6 +521,10 @@ while [[ "$finalconfirm" != YES ]]; do
     fi
 done
 shredstarted=1
+if [[ ${#promptdirs[@]} != 0 ]]; then
+    excludedirs+=("${promptdirs[@]}")
+    yesexclude="ON"
+fi
 if [[ $tempexist == 1 ]]; then
     oldtempexist=1
     oldtemp="$crnttemp"
@@ -629,7 +631,6 @@ if [[ "$rmvdir" == "ON" ]]; then
         fi
     fi
 fi
-echo ${!unique[@]}
 if [[ $tempexist == 1 ]]; then
     echo ""
     echo "Checking for errors..."
@@ -678,6 +679,5 @@ elif [[ $logsyes == 1 ]]; then
     fi
 else
     echo ""
-    echo "Shredding of $shredvictim completed."
+    echo "Shredding of $shredvictim completed, but error checking was skipped due to both logging and temp files being disabled."
 fi
-echo "${exdirs[@]}"

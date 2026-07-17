@@ -1,3 +1,21 @@
+## rshred v3.0.1 July 17 2026
+
+- fixed rversion set error
+
+- fixed bug where log file would be validated despite abortion at final warning
+
+- fixed bug preventing exclusion of prompt directories when config exclusions were off
+
+- fixed bug where prompt directories set before final warning were permanently locked in even when aborted
+
+- removed echo statements used for debugging
+
+- clarified that error checking is disabled when both logs and temp files are disabled
+
+- fixed RemoveDirectories config option not preserved on config file update
+
+- fixed bug where RemoveDirectories is not actually set to OFF by default
+
 ## rshred v3.0.0 May 18 2026
 
 - warned about invalid directory paths placed in config file

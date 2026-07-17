@@ -502,6 +502,7 @@ while [[ "$finalconfirm" != YES ]]; do
         echo ""
         echo "Shred aborted. No changes were made."
         echo ""
+        continue
     fi
     if [[ $logsyes == 1 ]]; then
         mkdir -p "$logpath" > /dev/null 2>&1

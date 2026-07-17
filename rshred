@@ -631,7 +631,6 @@ if [[ "$rmvdir" == "ON" ]]; then
         fi
     fi
 fi
-echo ${!unique[@]}
 if [[ $tempexist == 1 ]]; then
     echo ""
     echo "Checking for errors..."
@@ -682,4 +681,3 @@ else
     echo ""
     echo "Shredding of $shredvictim completed."
 fi
-echo "${exdirs[@]}"

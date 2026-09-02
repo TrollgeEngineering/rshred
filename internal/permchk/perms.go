@@ -1,4 +1,4 @@
-package main
+package permchk
 
 import (
 	"fmt"
@@ -11,11 +11,11 @@ type WarnPermLists struct {
 	DnRX   []string
 	DnW    []string
 	FnW    []string
-	sticky []string
+	Sticky []string
 }
 
 type UnixPerms struct {
-	dir, r, w, x, sticky bool
+	Dir, R, W, X, Sticky bool
 }
 
 func CheckPerm(path string) (UnixPerms, error) {
@@ -25,19 +25,19 @@ func CheckPerm(path string) (UnixPerms, error) {
 		return UnixPerms{}, err
 	}
 	if info.IsDir() {
-		perms.dir = true
+		perms.Dir = true
 	}
 	if PermQuery(path, 0) {
-		perms.r = true
+		perms.R = true
 	}
 	if PermQuery(path, 1) {
-		perms.w = true
+		perms.W = true
 	}
 	if PermQuery(path, 2) {
-		perms.x = true
+		perms.X = true
 	}
 	if QuerySticky(path) {
-		perms.sticky = true
+		perms.Sticky = true
 	}
 	return perms, nil
 }
@@ -47,7 +47,7 @@ func WalkPerms(walkingPath string) (WarnPermLists, error) {
 		DnRX:   []string{},
 		DnW:    []string{},
 		FnW:    []string{},
-		sticky: []string{},
+		Sticky: []string{},
 	}
 	errFull := filepath.WalkDir(walkingPath, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
@@ -61,8 +61,8 @@ func WalkPerms(walkingPath string) (WarnPermLists, error) {
 		if err2 != nil {
 			return nil
 		}
-		if perms.dir {
-			if !perms.r || !perms.x {
+		if perms.Dir {
+			if !perms.R || !perms.X {
 				thePerms.DnRX = append(thePerms.DnRX, path)
 				if path != walkingPath {
 					return fs.SkipDir
@@ -70,15 +70,15 @@ func WalkPerms(walkingPath string) (WarnPermLists, error) {
 					return fmt.Errorf("error: %q does not have read/exec permissions", walkingPath)
 				}
 			}
-			if !perms.w {
+			if !perms.W {
 				thePerms.DnW = append(thePerms.DnW, path)
 			}
-			if perms.sticky {
-				thePerms.sticky = append(thePerms.sticky, path)
+			if perms.Sticky {
+				thePerms.Sticky = append(thePerms.Sticky, path)
 			}
 			return nil
 		} else {
-			if !perms.w {
+			if !perms.W {
 				thePerms.FnW = append(thePerms.FnW, path)
 			}
 			return nil

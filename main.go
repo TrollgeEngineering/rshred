@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"codeberg.org/TrollgeEngineering/rshred/internal/permchk"
 )
 
 var (
@@ -100,15 +102,15 @@ func interact() int {
 		problemEntries := []string{}
 		goodEntries = []string{}
 		for _, entry := range entries {
-			perm, err := CheckPerm(entry)
+			perm, err := permchk.CheckPerm(entry)
 			switch {
 			case err != nil:
 				problemEntries = append(problemEntries, entry)
 				fmt.Printf("%q does not exist.\n", entry)
-			case perm.dir && !(perm.r && perm.x):
+			case perm.Dir && !(perm.R && perm.X):
 				problemEntries = append(problemEntries, entry)
 				fmt.Printf("you do not have read/execute permissions on the directory %q.\n", entry)
-			case !perm.dir && !perm.w:
+			case !perm.Dir && !perm.X:
 				problemEntries = append(problemEntries, entry)
 				fmt.Printf("you do not have write permissions on the file %q.\n", entry)
 			default:
@@ -136,14 +138,14 @@ func interact() int {
 		shredVictims[entry] = 0
 	}
 	for target := range shredVictims {
-		perms, err := WalkPerms(target)
+		perms, err := permchk.WalkPerms(target)
 		if err != nil {
 			continue
 		}
 		fileNoWrite = append(fileNoWrite, perms.FnW...)
 		dirNoReadAndExec = append(dirNoReadAndExec, perms.DnW...)
 		dirNoWrite = append(dirNoWrite, perms.DnW...)
-		dirSticky = append(dirSticky, perms.sticky...)
+		dirSticky = append(dirSticky, perms.Sticky...)
 	}
 	if len(fileNoWrite) > 0 || len(dirNoReadAndExec) > 0 {
 		if len(fileNoWrite) > 0 {
@@ -195,15 +197,15 @@ func interact() int {
 			for _, item := range extraArgs {
 				warnPrefix = ""
 				badFound = false
-				perms, err := CheckPerm(item)
+				perms, err := permchk.CheckPerm(item)
 				if err != nil {
 					fmt.Printf("UNRECOGNIZED FILE/DIR: %q\n", item)
 				} else {
-					if perms.dir {
-						if !(perms.r && perms.x) {
+					if perms.Dir {
+						if !(perms.R && perms.X) {
 							warnPrefix = "(no read/execute perms on dir) "
 						} else {
-							bad, err := WalkPerms(item)
+							bad, err := permchk.WalkPerms(item)
 							if err != nil {
 								fmt.Printf("(error checking permissions of children of dir) %v\n", item)
 								continue
@@ -224,7 +226,7 @@ func interact() int {
 							warnPrefix = "(no " + warnPrefix + "in dir) "
 						}
 					} else {
-						if !perms.w {
+						if !perms.W {
 							warnPrefix = "(no write perm on file) "
 						}
 					}

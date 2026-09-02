@@ -1,6 +1,7 @@
 //go:build unix
 
-package main
+// Package permchk checks permissions before shredding
+package permchk
 
 import (
 	"os"

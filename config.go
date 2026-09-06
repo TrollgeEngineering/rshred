@@ -7,6 +7,15 @@ import (
 	"strings"
 )
 
+type ConfigSpec []*GenConfigItem
+
+type GenConfigItem struct {
+	Key     string
+	IsList  bool
+	Default string
+	Comment string
+}
+
 type Config struct {
 	ValType int
 	Value   any
@@ -22,6 +31,24 @@ func ValidateConfig(magicLine string) error {
 	} else {
 		return nil
 	}
+}
+
+func GenConfig(spec ConfigSpec) []string {
+	confOut := []string{}
+	line := 0
+	for _, item := range spec {
+		if !item.IsList {
+			confOut[line] = fmt.Sprintf("# %v", item.Comment)
+			confOut[line+2] = fmt.Sprintf("%v=%v", item.Key, item.Default)
+			line = line + 4
+		} else {
+			confOut[line] = fmt.Sprintf("# %v", item.Comment)
+			confOut[line+2] = fmt.Sprintf("%v= {", item.Key)
+			confOut[line+4] = "}"
+			line = line + 6
+		}
+	}
+	return confOut
 }
 
 func ParseConfig(confFile []string, registry ConfigRegistry) []error {

@@ -17,7 +17,7 @@ type GenConfigItem struct {
 }
 
 type Config struct {
-	Default string
+	Default any
 	ValType int
 	Value   any
 }
@@ -74,64 +74,84 @@ func GenConfig(spec ConfigSpec) []string {
 
 func LoadDefault(registry ConfigRegistry) {
 	for _, conf := range registry {
-		conf.Value = conf.Default
+		if conf.ValType == 0 {
+			switch conf.Default {
+			case "ON":
+				conf.Value = true
+			case "OFF":
+				conf.Value = false
+			default:
+				panic("config item is bool, but default isn't ON or OFF")
+			}
+		} else {
+			conf.Value = conf.Default
+		}
 	}
 }
 
 func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 	var errs []error
+	inList := false
+	list := []string{}
+	listLn := 0
+	var listEntry *Config
 	for i, line := range confFile {
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, found := strings.Cut(line, "=")
-		if !found {
-			errs = append(errs, fmt.Errorf("line %v: does not contain \"=\"", i+1))
-			continue
-		}
-		conf, ok := registry[key]
-		if !ok {
-			errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i+1, key))
-			continue
+		if inList {
+			if strings.TrimSpace(line) == "}" {
+				inList = false
+				listEntry.Value = list
+				list = []string{}
+			} else if strings.TrimSpace(line) != "" {
+				list = append(list, line)
+			}
 		} else {
-			switch conf.ValType {
-			case 0:
-				switch value {
-				case "ON":
-					conf.Value = true
-				case "OFF":
-					conf.Value = false
-				default:
-					errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i+1, key))
-					continue
-				}
-			case 1:
-				num, err := strconv.Atoi(value)
-				if err != nil {
-					if errors.Is(err, strconv.ErrRange) {
-						errs = append(errs, fmt.Errorf("line %v: value of %q too large", i+1, key))
-						continue
+			if strings.HasPrefix(line, "#") || line == "" {
+				continue
+			}
+			key, value, found := strings.Cut(line, "=")
+			if !found {
+				errs = append(errs, fmt.Errorf("line %v: does not contain \"=\"", i+1))
+				continue
+			}
+			conf, ok := registry[key]
+			if !ok {
+				errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i+1, key))
+			} else {
+				switch conf.ValType {
+				case 0:
+					switch value {
+					case "ON":
+						conf.Value = true
+					case "OFF":
+						conf.Value = false
+					default:
+						errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i+1, key))
+					}
+				case 1:
+					num, err := strconv.Atoi(value)
+					if err != nil {
+						if errors.Is(err, strconv.ErrRange) {
+							errs = append(errs, fmt.Errorf("line %v: value of %q too large", i+1, key))
+						} else {
+							errs = append(errs, fmt.Errorf("line %v: value of %q must be an integer", i+1, key))
+						}
 					} else {
-						errs = append(errs, fmt.Errorf("line %v: value of %q must be an integer", i+1, key))
-						continue
+						conf.Value = num
 					}
+				case 2:
+					conf.Value = value
+				case 3:
+					listLn = i
+					listEntry = conf
+					inList = true
+				default:
+					panic(fmt.Sprintf("invalid conf value %q", conf.ValType))
 				}
-				conf.Value = num
-			case 2:
-				conf.Value = value
-			case 3:
-				list := []string{}
-				for j := i + 1; j < len(confFile); j++ {
-					if strings.TrimSpace(confFile[j]) == "}" {
-						break
-					}
-					list = append(list, confFile[j])
-				}
-				conf.Value = list
-			default:
-				panic(fmt.Sprintf("invalid conf value %q", conf.ValType))
 			}
 		}
+	}
+	if inList {
+		errs = append(errs, fmt.Errorf("line %v: list has no closing brace", listLn+1))
 	}
 	return errs
 }

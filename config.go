@@ -36,6 +36,7 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 					conf.Value = false
 				default:
 					errorSlice = append(errorSlice, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i, key))
+					continue
 				}
 			case 1:
 				num, err := strconv.Atoi(value)
@@ -49,6 +50,18 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 					}
 				}
 				conf.Value = num
+			case 2:
+				conf.Value = value
+			case 3:
+				list := []string{}
+				for j := i + 1; j < len(confFile); j++ {
+					if strings.TrimSpace(confFile[j]) == "END" {
+						break
+					}
+					list = append(list, confFile[j])
+				}
+			default:
+				panic(fmt.Sprintf("invalid conf value %q", conf.ValType))
 			}
 		}
 	}

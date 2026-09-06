@@ -13,10 +13,11 @@ type GenConfigItem struct {
 	Key     string
 	IsList  bool
 	Default string
-	Comment string
+	Comment []string
 }
 
 type Config struct {
+	Default string
 	ValType int
 	Value   any
 }
@@ -34,21 +35,47 @@ func ValidateConfig(magicLine string) error {
 }
 
 func GenConfig(spec ConfigSpec) []string {
-	confOut := []string{}
+	fileCap := 0
+	for _, item := range spec {
+		fileCap = fileCap + 2
+		if comNum := len(item.Comment); comNum > 0 {
+			fileCap = fileCap + comNum + 1
+		}
+		if item.IsList {
+			fileCap = fileCap + 2
+		}
+	}
+	confOut := make([]string, fileCap)
 	line := 0
 	for _, item := range spec {
 		if !item.IsList {
-			confOut[line] = fmt.Sprintf("# %v", item.Comment)
-			confOut[line+2] = fmt.Sprintf("%v=%v", item.Key, item.Default)
-			line = line + 4
+			for i, comment := range item.Comment {
+				confOut[line+i] = fmt.Sprintf("# %v", comment)
+			}
+			if comNum := len(item.Comment); comNum > 0 {
+				line = line + comNum + 1
+			}
+			confOut[line] = fmt.Sprintf("%v=%v", item.Key, item.Default)
+			line = line + 2
 		} else {
-			confOut[line] = fmt.Sprintf("# %v", item.Comment)
-			confOut[line+2] = fmt.Sprintf("%v= {", item.Key)
-			confOut[line+4] = "}"
-			line = line + 6
+			for i, comment := range item.Comment {
+				confOut[line+i] = fmt.Sprintf("# %v", comment)
+			}
+			if comNum := len(item.Comment); comNum > 0 {
+				line = line + comNum + 1
+			}
+			confOut[line] = fmt.Sprintf("%v= {", item.Key)
+			confOut[line+2] = "}"
+			line = line + 4
 		}
 	}
 	return confOut
+}
+
+func LoadDefault(registry ConfigRegistry) {
+	for _, conf := range registry {
+		conf.Value = conf.Default
+	}
 }
 
 func ParseConfig(confFile []string, registry ConfigRegistry) []error {
@@ -64,7 +91,7 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 		}
 		conf, ok := registry[key]
 		if !ok {
-			errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i, key))
+			errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i+1, key))
 			continue
 		} else {
 			switch conf.ValType {
@@ -75,17 +102,17 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 				case "OFF":
 					conf.Value = false
 				default:
-					errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i, key))
+					errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i+1, key))
 					continue
 				}
 			case 1:
 				num, err := strconv.Atoi(value)
 				if err != nil {
 					if errors.Is(err, strconv.ErrRange) {
-						errs = append(errs, fmt.Errorf("line %v: value of %q too large", i, key))
+						errs = append(errs, fmt.Errorf("line %v: value of %q too large", i+1, key))
 						continue
 					} else {
-						errs = append(errs, fmt.Errorf("line %v: value of %q must be an integer", i, key))
+						errs = append(errs, fmt.Errorf("line %v: value of %q must be an integer", i+1, key))
 						continue
 					}
 				}
@@ -95,7 +122,7 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 			case 3:
 				list := []string{}
 				for j := i + 1; j < len(confFile); j++ {
-					if strings.TrimSpace(confFile[j]) == "END" {
+					if strings.TrimSpace(confFile[j]) == "}" {
 						break
 					}
 					list = append(list, confFile[j])

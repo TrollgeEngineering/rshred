@@ -61,6 +61,21 @@ const rVersion = "v4.0.0"
 
 var shredVictims = map[string]int{}
 
+var rshredConf = ConfigSpec{
+	&GenConfigItem{Key: "CheckForUpdates", Default: "OFF", Comment: []string{"Checks for updates on boot. (ON/OFF) Default:"}},
+	&GenConfigItem{Key: "LogPath", Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
+	&GenConfigItem{Key: "ExcludeDirsPrompt", Default: "OFF", Comment: []string{"Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis."}},
+	&GenConfigItem{Key: "ExcludeConfigDirs", Default: "ON", Comment: []string{"Enables the exclusion of the directories set below. (ON/OFF) Default: ON"}},
+	&GenConfigItem{
+		Key: "ExcludedDirectories", IsList: true, Comment: []string{
+			"Full paths of directories you always want to exlude from shredding.",
+			"Put the FULL, ABSOLUTE PATHS of the directories you want between the brackets (\"{\" and \"}\")",
+			"Put one directory path per line.",
+			"Do not quote or escape any paths, even if they contain spaces or special characters.",
+		},
+	},
+}
+
 func DecideInteract(args []string) int {
 	if len(args) > 0 {
 		return cli(args)

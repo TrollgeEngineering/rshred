@@ -15,16 +15,19 @@ type Config struct {
 type ConfigRegistry map[string]*Config
 
 func ParseConfig(confFile []string, registry ConfigRegistry) []error {
-	errorSlice := []error{}
+	var errs []error
 	for i, line := range confFile {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
 		key, value, found := strings.Cut(line, "=")
 		if !found {
-			errorSlice = append(errorSlice, fmt.Errorf("line %v: does not contain \"=\"", i+1))
+			errs = append(errs, fmt.Errorf("line %v: does not contain \"=\"", i+1))
 			continue
 		}
 		conf, ok := registry[key]
 		if !ok {
-			errorSlice = append(errorSlice, fmt.Errorf("line %v: unrecognized key: %q", i, key))
+			errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i, key))
 			continue
 		} else {
 			switch conf.ValType {
@@ -35,17 +38,17 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 				case "OFF":
 					conf.Value = false
 				default:
-					errorSlice = append(errorSlice, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i, key))
+					errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i, key))
 					continue
 				}
 			case 1:
 				num, err := strconv.Atoi(value)
 				if err != nil {
 					if errors.Is(err, strconv.ErrRange) {
-						errorSlice = append(errorSlice, fmt.Errorf("line %v: value of %q too large", i, key))
+						errs = append(errs, fmt.Errorf("line %v: value of %q too large", i, key))
 						continue
 					} else {
-						errorSlice = append(errorSlice, fmt.Errorf("line %v: value of %q must be an integer", i, key))
+						errs = append(errs, fmt.Errorf("line %v: value of %q must be an integer", i, key))
 						continue
 					}
 				}
@@ -60,9 +63,11 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 					}
 					list = append(list, confFile[j])
 				}
+				conf.Value = list
 			default:
 				panic(fmt.Sprintf("invalid conf value %q", conf.ValType))
 			}
 		}
 	}
+	return errs
 }

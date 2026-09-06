@@ -57,10 +57,9 @@ var rshredRegistry = flagRegistry{
 	"shut-up": &Flag{},
 }
 
-var (
-	rVersion     string = "v4.0.0"
-	shredVictims        = map[string]int{}
-)
+const rVersion = "v4.0.0"
+
+var shredVictims = map[string]int{}
 
 func DecideInteract(args []string) int {
 	if len(args) > 0 {

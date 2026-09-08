@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
-	"log"
+	"io/fs"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -62,18 +65,25 @@ const rVersion = "v4.0.0"
 var shredVictims = map[string]int{}
 
 var rshredConf = ConfigSpec{
-	&GenConfigItem{Key: "CheckForUpdates", Default: "OFF", Comment: []string{"Checks for updates on boot. (ON/OFF) Default:"}},
-	&GenConfigItem{Key: "LogPath", Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
-	&GenConfigItem{Key: "ExcludeDirsPrompt", Default: "OFF", Comment: []string{"Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis."}},
-	&GenConfigItem{Key: "ExcludeConfigDirs", Default: "ON", Comment: []string{"Enables the exclusion of the directories set below. (ON/OFF) Default: ON"}},
-	&GenConfigItem{
-		Key: "ExcludedDirectories", IsList: true, Comment: []string{
+	&Config{
+		Key: "ConfPath", Default: "", Comment: []string{
+			"The directory for this config file. This file will be moved automatically to the specified location on the next boot of rshred.",
+			"If this is left blank, it will default to the default config location on your OS.",
+		},
+	},
+	&Config{Key: "CheckForUpdates", Default: "OFF", Comment: []string{"Checks for updates on boot. (ON/OFF) Default:"}},
+	&Config{Key: "LogPath", Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
+	&Config{Key: "ExcludeDirsPrompt", Default: "OFF", Comment: []string{"Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis."}},
+	&Config{Key: "ExcludeConfigDirs", Default: "ON", Comment: []string{"Enables the exclusion of the directories set below. (ON/OFF) Default: ON"}},
+	&Config{
+		Key: "ExcludedDirectories", ValType: 3, Comment: []string{
 			"Full paths of directories you always want to exlude from shredding.",
 			"Put the FULL, ABSOLUTE PATHS of the directories you want between the brackets (\"{\" and \"}\")",
 			"Put one directory path per line.",
-			"Do not quote or escape any paths, even if they contain spaces or special characters.",
+			"Do not quote or escape any 9paths, even if they contain spaces or special characters.",
 		},
 	},
+	&Config{Key: "RemoveDirectories", Default: "OFF", Comment: []string{"Attempts to remove all empty directories if the -u flag is used."}},
 }
 
 func DecideInteract(args []string) int {
@@ -105,6 +115,127 @@ func interact() int {
 			os.Exit(2)
 		}
 	}()
+
+	confDir, err := os.UserConfigDir()
+	if err != nil {
+		PrintExtraNewline("error getting config directory. loading default settings.")
+		LoadDefault(rshredConf)
+	} else {
+		rshredConfDir := filepath.Join(confDir, "rshred")
+		confFilePath := filepath.Join(rshredConfDir, "rshred.conf")
+		openConfFile, err := os.OpenFile(confFilePath, os.O_RDONLY, 0)
+		if err != nil {
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				if YesOrNo(true, "The config file at %v does not exist. Would you like to create it?", confFilePath) {
+					err := os.MkdirAll(rshredConfDir, 0o700)
+					if err != nil {
+						if errors.Is(err, fs.ErrPermission) {
+							PrintExtraNewline("permission denied while attempting to create config directories. loading default settings.")
+							LoadDefault(rshredConf)
+						} else {
+							PrintExtraNewline("unknown error while attempting to create config directories. loading default settings.")
+							LoadDefault(rshredConf)
+						}
+					} else {
+						openConfFile, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o700)
+						if err != nil {
+							switch {
+							case errors.Is(err, fs.ErrExist):
+								PrintExtraNewline("error creating config file: file exists. loading default config...")
+								LoadDefault(rshredConf)
+							case errors.Is(err, fs.ErrPermission):
+								PrintExtraNewline("error creating config file: permission denied. loading default config...")
+								LoadDefault(rshredConf)
+							default:
+								PrintExtraNewline("unknown error creating config file. loading default config...")
+							}
+						} else {
+							newConf := GenConfig(rshredConf)
+							for _, line := range newConf {
+								fmt.Fprintln(openConfFile, line)
+							}
+							LoadDefault(rshredConf)
+						}
+						openConfFile.Close()
+					}
+				} else {
+					PrintExtraNewline("loading default config...")
+				}
+			case errors.Is(err, fs.ErrPermission):
+				PrintExtraNewline("error reading config file: permission denied. loading default config...")
+				LoadDefault(rshredConf)
+			default:
+				PrintExtraNewline("unknown error reading config file. loading default config...")
+				LoadDefault(rshredConf)
+			}
+		} else {
+			scanner := bufio.NewScanner(openConfFile)
+			var confFile []string
+			for scanner.Scan() {
+				confFile = append(confFile, scanner.Text())
+			}
+			if scanner.Err() != nil {
+				PrintExtraNewline("unknown error reading config file. loading default config...")
+				LoadDefault(rshredConf)
+			} else {
+				err := ValidateConfig(confFile[0])
+				if err != nil {
+					if YesOrNo(true, "%v\nWould you like to regenerate it? Your settings will be preserved where possible.") {
+						newConf := TransferConf(rshredConf, confFile)
+						openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+						if err != nil {
+							switch {
+							case errors.Is(err, fs.ErrPermission):
+								PrintExtraNewline("error regenerating config file: permission denied. loading default config...")
+								LoadDefault(rshredConf)
+							default:
+								PrintExtraNewline("unknown error regenerating config file. loading default config...")
+								LoadDefault(rshredConf)
+							}
+						} else {
+							for _, item := range newConf {
+								fmt.Fprintln(openNewConf, item)
+							}
+							LoadDefault(rshredConf)
+						}
+					} else {
+						PrintExtraNewline("loading default config...")
+						LoadDefault(rshredConf)
+					}
+				} else {
+					err := ParseConfig(confFile[2:], rshredConf)
+					if err != nil {
+						for _, confError := range err {
+							fmt.Println(confError)
+						}
+						if YesOrNo(true, "\nThe above lines in the config file at %s are invalid.\nWould you like to regenerate it? Your settings will be preserved where possible.", confFilePath) {
+							newConf := TransferConf(rshredConf, confFile)
+							openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+							if err != nil {
+								switch {
+								case errors.Is(err, fs.ErrPermission):
+									PrintExtraNewline("error regenerating config file: permission denied. loading default config...")
+									LoadDefault(rshredConf)
+								default:
+									PrintExtraNewline("unknown error regenerating config file. loading default config...")
+									LoadDefault(rshredConf)
+								}
+							} else {
+								for _, item := range newConf {
+									fmt.Fprintln(openNewConf, item)
+								}
+								LoadDefault(rshredConf)
+							}
+						} else {
+							PrintExtraNewline("loading default config...")
+							LoadDefault(rshredConf)
+						}
+					}
+				}
+			}
+		}
+	}
 	fmt.Printf("rshred Copyright 2026 TrollgeEngineering\n\n")
 	fmt.Printf("This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation,\neither version 3 of the License, or (at your option) any later version.\n\n")
 	fmt.Printf("This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details.\n\n")
@@ -175,7 +306,7 @@ func interact() int {
 			}
 		}
 		if !YesOrNo(false, "You do not have the neccesary permissions to shred the above files/directories in the paths you listed. Continue anyway?") {
-			log.Fatal("Shred aborted. No changes were made.")
+			fmt.Fprintln(os.Stderr, "Shred aborted. No changes were made.")
 		}
 	}
 	if len(dirNoWrite) > 0 || len(dirSticky) > 0 {

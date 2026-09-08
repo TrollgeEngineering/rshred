@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+func PrintExtraNewline(input string, a ...any) {
+	fmt.Printf("%s\n\n", fmt.Sprintf(input, a...))
+}
+
 func QueryMultiple(query string, a ...any) []string {
 	input := []string{}
 	fmt.Printf(query, a...)

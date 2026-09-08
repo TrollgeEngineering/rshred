@@ -7,22 +7,47 @@ import (
 	"strings"
 )
 
-type ConfigSpec []*GenConfigItem
-
-type GenConfigItem struct {
-	Key     string
-	IsList  bool
-	Default string
-	Comment []string
-}
-
 type Config struct {
+	Key     string
 	Default any
 	ValType int
+	Comment []string
 	Value   any
 }
 
-type ConfigRegistry map[string]*Config
+type ConfigSpec []*Config
+
+func (c ConfigSpec) QueryConf(key string) *Config {
+	for _, item := range c {
+		if item.Key == key {
+			return item
+		}
+	}
+	return nil
+}
+
+func TransferConf(crntConf ConfigSpec, oldFile []string) []string {
+	confCopy := make(ConfigSpec, len(crntConf))
+	for i, item := range crntConf {
+		entry := *item
+		confCopy[i] = &entry
+	}
+	ParseConfig(oldFile, confCopy)
+	for _, item := range confCopy {
+		if item.Value != nil {
+			if item.ValType == 0 {
+				if item.Value == true {
+					item.Default = "ON"
+				} else {
+					item.Default = "OFF"
+				}
+			} else {
+				item.Default = item.Value
+			}
+		}
+	}
+	return GenConfig(confCopy)
+}
 
 func ValidateConfig(magicLine string) error {
 	if !strings.HasPrefix(magicLine, "Generated with rshred") {
@@ -41,14 +66,14 @@ func GenConfig(spec ConfigSpec) []string {
 		if comNum := len(item.Comment); comNum > 0 {
 			fileCap = fileCap + comNum + 1
 		}
-		if item.IsList {
+		if item.ValType == 3 {
 			fileCap = fileCap + 2
 		}
 	}
 	confOut := make([]string, fileCap)
 	line := 0
 	for _, item := range spec {
-		if !item.IsList {
+		if item.ValType != 3 {
 			for i, comment := range item.Comment {
 				confOut[line+i] = fmt.Sprintf("# %v", comment)
 			}
@@ -72,7 +97,7 @@ func GenConfig(spec ConfigSpec) []string {
 	return confOut
 }
 
-func LoadDefault(registry ConfigRegistry) {
+func LoadDefault(registry ConfigSpec) {
 	for _, conf := range registry {
 		if conf.ValType == 0 {
 			switch conf.Default {
@@ -89,7 +114,7 @@ func LoadDefault(registry ConfigRegistry) {
 	}
 }
 
-func ParseConfig(confFile []string, registry ConfigRegistry) []error {
+func ParseConfig(confFile []string, registry ConfigSpec) []error {
 	var errs []error
 	inList := false
 	list := []string{}
@@ -113,8 +138,8 @@ func ParseConfig(confFile []string, registry ConfigRegistry) []error {
 				errs = append(errs, fmt.Errorf("line %v: does not contain \"=\"", i+1))
 				continue
 			}
-			conf, ok := registry[key]
-			if !ok {
+			conf := registry.QueryConf(key)
+			if conf == nil {
 				errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i+1, key))
 			} else {
 				switch conf.ValType {

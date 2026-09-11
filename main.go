@@ -65,14 +65,8 @@ const rVersion = "v4.0.0"
 var shredVictims = map[string]int{}
 
 var rshredConf = ConfigSpec{
-	&Config{
-		Key: "ConfPath", Default: "", Comment: []string{
-			"The directory for this config file. This file will be moved automatically to the specified location on the next boot of rshred.",
-			"If this is left blank, it will default to the default config location on your OS.",
-		},
-	},
 	&Config{Key: "CheckForUpdates", Default: "OFF", Comment: []string{"Checks for updates on boot. (ON/OFF) Default:"}},
-	&Config{Key: "LogPath", Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
+	&Config{Key: "LogPath", ValType: 2, Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
 	&Config{Key: "ExcludeDirsPrompt", Default: "OFF", Comment: []string{"Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis."}},
 	&Config{Key: "ExcludeConfigDirs", Default: "ON", Comment: []string{"Enables the exclusion of the directories set below. (ON/OFF) Default: ON"}},
 	&Config{
@@ -80,7 +74,7 @@ var rshredConf = ConfigSpec{
 			"Full paths of directories you always want to exlude from shredding.",
 			"Put the FULL, ABSOLUTE PATHS of the directories you want between the brackets (\"{\" and \"}\")",
 			"Put one directory path per line.",
-			"Do not quote or escape any 9paths, even if they contain spaces or special characters.",
+			"Do not quote or escape any paths, even if they contain spaces or special characters.",
 		},
 	},
 	&Config{Key: "RemoveDirectories", Default: "OFF", Comment: []string{"Attempts to remove all empty directories if the -u flag is used."}},
@@ -106,10 +100,10 @@ func interact() int {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP)
 	go func() {
 		sig := <-sigChan
+		fmt.Fprintf(os.Stderr, "\nInterrupt recieved!\n\n")
+		fmt.Fprintln(os.Stderr, "Quitting...")
 		if sysSig, ok := sig.(syscall.Signal); ok {
 			exitCode := 128 + int(sysSig)
-			fmt.Fprintf(os.Stderr, "\nInterrupt recieved!\n\n")
-			fmt.Fprintln(os.Stderr, "Quitting...")
 			os.Exit(exitCode)
 		} else {
 			os.Exit(2)
@@ -151,6 +145,7 @@ func interact() int {
 								PrintExtraNewline("unknown error creating config file. loading default config...")
 							}
 						} else {
+							fmt.Fprintf(openConfFile, "Generated with rshred %v\n\n", rVersion)
 							newConf := GenConfig(rshredConf)
 							for _, line := range newConf {
 								fmt.Fprintln(openConfFile, line)
@@ -181,9 +176,10 @@ func interact() int {
 			} else {
 				err := ValidateConfig(confFile[0])
 				if err != nil {
-					if YesOrNo(true, "%v\nWould you like to regenerate it? Your settings will be preserved where possible.") {
+					if YesOrNo(true, "%v\nWould you like to regenerate it? Your settings will be preserved where possible.", err) {
 						newConf := TransferConf(rshredConf, confFile)
 						openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+						fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion)
 						if err != nil {
 							switch {
 							case errors.Is(err, fs.ErrPermission):
@@ -212,6 +208,7 @@ func interact() int {
 						if YesOrNo(true, "\nThe above lines in the config file at %s are invalid.\nWould you like to regenerate it? Your settings will be preserved where possible.", confFilePath) {
 							newConf := TransferConf(rshredConf, confFile)
 							openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+							fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion)
 							if err != nil {
 								switch {
 								case errors.Is(err, fs.ErrPermission):
@@ -333,6 +330,7 @@ func interact() int {
 		extraArgs, err := ParseFlags(interactArgs, rshredRegistry)
 		if err != nil {
 			fmt.Println(err)
+			continue
 		}
 		if len(extraArgs) > 0 {
 			extraFiles := []string{}

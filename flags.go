@@ -10,10 +10,11 @@ import (
 )
 
 type Flag struct {
-	TakesValue bool
-	Seen       bool
-	ValType    int
-	Value      any
+	TakesValue    bool
+	Seen          bool
+	ValType       int
+	Value         any
+	CanBeMultiple bool
 }
 
 /* var (
@@ -167,7 +168,11 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 				if !ok {
 					return nil, fmt.Errorf("error: invalid argument %q: flag %q not recognized", arg, splitEqualsFlag[0])
 				}
-				cEquals.Seen = true
+				if cEquals.CanBeMultiple || !cEquals.Seen {
+					cEquals.Seen = true
+				} else {
+					return nil, fmt.Errorf("error: flag %q can only be used once", splitEqualsFlag[0])
+				}
 				err := CheckValue(splitEqualsFlag[0], baldArg, splitEqualsFlag[1], cEquals)
 				if err != nil {
 					return nil, err
@@ -190,7 +195,11 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 							nonBoolFlagFound = true
 							nonBool = string(baldArg[i])
 						}
-						cNonLong.Seen = true
+						if cNonLong.CanBeMultiple || !cNonLong.Seen {
+							cNonLong.Seen = true
+						} else {
+							return nil, fmt.Errorf("error: flag %q can only be used once", string(baldArg[i]))
+						}
 					} else {
 						potentFlagValue = append(potentFlagValue, baldArg[i])
 					}
@@ -205,7 +214,11 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 				return nil, fmt.Errorf("error: invalid argument %q. long flags cannot be passed together in the same argument and cannot take values in the same argument without being seperated by \"=\"", baldArg)
 			}
 		case c.TakesValue:
-			c.Seen = true
+			if c.CanBeMultiple || !c.Seen {
+				c.Seen = true
+			} else {
+				return nil, fmt.Errorf("error: flag %q can only be used once", arg)
+			}
 			if i == len(inputArgs)-1 {
 				return nil, fmt.Errorf("error: flag %q requires a value", arg)
 			}
@@ -215,7 +228,11 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 				consumedArgs = append(consumedArgs, i+1)
 			}
 		default:
-			c.Seen = true
+			if c.CanBeMultiple || !c.Seen {
+				c.Seen = true
+			} else {
+				return nil, fmt.Errorf("error: flag %q can only be used once", arg)
+			}
 		}
 	}
 	return nil, nil

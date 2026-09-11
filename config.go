@@ -99,7 +99,8 @@ func GenConfig(spec ConfigSpec) []string {
 
 func LoadDefault(registry ConfigSpec) {
 	for _, conf := range registry {
-		if conf.ValType == 0 {
+		switch conf.ValType {
+		case 0:
 			switch conf.Default {
 			case "ON":
 				conf.Value = true
@@ -108,8 +109,22 @@ func LoadDefault(registry ConfigSpec) {
 			default:
 				panic("config item is bool, but default isn't ON or OFF")
 			}
-		} else {
-			conf.Value = conf.Default
+		case 1:
+			num, ok := conf.Default.(int)
+			if !ok {
+				panic(fmt.Sprintf("config key %q takes an int, but default value is not an int!", conf.Key))
+			} else {
+				conf.Value = num
+			}
+		case 2:
+			defString, ok := conf.Default.(string)
+			if !ok {
+				panic(fmt.Sprintf("config key %q takes a string, but default value is not a string!", conf.Key))
+			} else {
+				conf.Value = defString
+			}
+		default:
+			panic(fmt.Sprintf("invalid ValType %q", conf))
 		}
 	}
 }

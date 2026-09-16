@@ -18,15 +18,19 @@ type Flag struct {
 }
 
 func (e *FlagError) Error() string {
-	return fmt.Sprintf("error: flag %s: %v", e.Flag, e.Err)
+	if e.Arg != "" {
+		return fmt.Sprintf("error: argument %q: flag %s: %v", e.Arg, e.Flag, e.Err)
+	} else {
+		return fmt.Sprintf("error: flag %s: %v", e.Flag, e.Err)
+	}
 }
 
 func (e *ArgError) Error() string {
 	return fmt.Sprintf("error: argument %q: %v", e.Arg, e.Err)
 }
 
-func (e *SizeError) Error() string {
-	return fmt.Sprintf("error: invalid size %q: %v", e.Size, e.Err)
+func (e *ValueError) Error() string {
+	return fmt.Sprintf("error: flag %s: invalid value %q: %v", e.Flag, e.Value, e.Err)
 }
 
 func (e *FlagError) Unwrap() error {
@@ -37,13 +41,14 @@ func (e *ArgError) Unwrap() error {
 	return e.Err
 }
 
-func (e *SizeError) Unwrap() error {
+func (e *ValueError) Unwrap() error {
 	return e.Err
 }
 
-type SizeError struct {
-	Size string
-	Err  error
+type ValueError struct {
+	Value string
+	Flag  string
+	Err   error
 }
 
 var (
@@ -56,6 +61,7 @@ var (
 )
 
 var (
+	ErrNeedInt   = errors.New("flag needs an integer value")
 	ErrTooLarge  = errors.New("value is too large")
 	ErrNegative  = errors.New("value cannot be negative")
 	ErrNoNum     = errors.New("value must begin with a number")
@@ -68,6 +74,7 @@ type ArgError struct {
 }
 
 type FlagError struct {
+	Arg  string
 	Flag string
 	Err  error
 }
@@ -119,14 +126,14 @@ type flagRegistry map[string]*Flag
 	ShredSize  int  // -s flag
 } */
 
-func ParseSize(input string, s *Flag) error {
+func ParseSize(input string) (int, error) {
 	bytes, err := strconv.Atoi(input)
 	if errors.Is(err, strconv.ErrRange) {
-		return &SizeError{input, ErrTooLarge}
+		return 0, ErrTooLarge
 	}
 	if err != nil || bytes < 0 {
 		if strings.HasPrefix(input, "-") {
-			return &SizeError{input, ErrNegative}
+			return 0, ErrNegative
 		}
 		allNums := false
 		val := []byte{}
@@ -138,38 +145,31 @@ func ParseSize(input string, s *Flag) error {
 						allNums = true
 					}
 				} else {
-					return &SizeError{input, ErrNoNum}
+					return 0, ErrNoNum
 				}
 			} else {
 				baseNum, _ := strconv.Atoi(string(val))
 				switch string(input[i]) {
 				case "B":
-					s.Value = baseNum
-					return nil
+					return baseNum, nil
 				case "K":
-					s.Value = 1000 * baseNum
-					return nil
+					return 1000 * baseNum, nil
 				case "M":
-					s.Value = 1000 * 1000 * baseNum
-					return nil
+					return 1000 * 1000 * baseNum, nil
 				case "G":
-					s.Value = 1000 * 1000 * 1000 * baseNum
-					return nil
+					return 1000 * 1000 * 1000 * baseNum, nil
 				case "T":
-					s.Value = 1000 * 1000 * 1000 * 1000 * baseNum
-					return nil
+					return 1000 * 1000 * 1000 * 1000 * baseNum, nil
 				case "P":
-					s.Value = 1000 * 1000 * 1000 * 1000 * 1000 * baseNum
-					return nil
+					return 1000 * 1000 * 1000 * 1000 * 1000 * baseNum, nil
 				default:
-					return &SizeError{input, ErrBadSuffix}
+					return 0, ErrBadSuffix
 				}
 			}
 		}
-		return nil // This will be never be hit, but my IDE wanted this return anyway.
+		panic("uncaught exception while parsing size")
 	} else {
-		s.Value = bytes
-		return nil
+		return bytes, nil
 	}
 }
 
@@ -201,7 +201,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 				if !strings.HasPrefix(inputArgs[i], "-") {
 					leftoverArgs = append(leftoverArgs, inputArgs[i])
 				} else {
-					return nil, fmt.Errorf("error: invalid argument %q. all arguments must come before paths. use \"--\" before paths beginning with \"-\"", leftoverArgs[0])
+					return nil, &ArgError{inputArgs[i], ErrFlagAfterNonFlag}
 				}
 			}
 			return leftoverArgs, nil
@@ -210,23 +210,23 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 		switch {
 		case !ok:
 			if len(baldArg) <= 1 {
-				return nil, fmt.Errorf("error: flag %q not recognized", baldArg)
+				return nil, &ArgError{baldArg, ErrUnknown}
 			}
 			switch {
 			case strings.Contains(arg, "="):
 				splitEqualsFlag := strings.SplitN(baldArg, "=", 2)
 				cEquals, ok := registry[splitEqualsFlag[0]]
 				if !ok {
-					return nil, fmt.Errorf("error: invalid argument %q: flag %q not recognized", arg, splitEqualsFlag[0])
+					return nil, &ArgError{baldArg, ErrUnknown}
 				}
 				if cEquals.CanBeMultiple || !cEquals.Seen {
 					cEquals.Seen = true
 				} else {
-					return nil, fmt.Errorf("error: flag %q can only be used once", splitEqualsFlag[0])
+					return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
 				}
-				err := CheckValue(splitEqualsFlag[0], baldArg, splitEqualsFlag[1], cEquals)
+				err := CheckValue(splitEqualsFlag[1], cEquals)
 				if err != nil {
-					return nil, err
+					return nil, &ValueError{splitEqualsFlag[1], splitEqualsFlag[0], err}
 				}
 			case !long:
 				potentFlagValue := []byte{}
@@ -237,9 +237,9 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 						cNonLong, ok := registry[string(baldArg[i])]
 						if !ok {
 							if i == 0 {
-								return nil, fmt.Errorf("error: invalid argument %q. unrecognized flag %q", arg, string(baldArg[i]))
+								return nil, &FlagError{baldArg, string(baldArg[i]), ErrUnknown}
 							} else {
-								return nil, fmt.Errorf("error: invalid argument %q. flag %q cannot take a value", arg, string(baldArg[i-1]))
+								return nil, &FlagError{baldArg, string(baldArg[i-1]), ErrNoTakeValue}
 							}
 						}
 						if cNonLong.TakesValue {
@@ -249,32 +249,32 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 						if cNonLong.CanBeMultiple || !cNonLong.Seen {
 							cNonLong.Seen = true
 						} else {
-							return nil, fmt.Errorf("error: flag %q can only be used once", string(baldArg[i]))
+							return nil, &FlagError{baldArg, string(baldArg), ErrDupe}
 						}
 					} else {
 						potentFlagValue = append(potentFlagValue, baldArg[i])
 					}
 				}
 				if nonBoolFlagFound {
-					err := CheckValue(baldArg, nonBool, string(potentFlagValue), registry[nonBool])
+					err := CheckValue(string(potentFlagValue), registry[nonBool])
 					if err != nil {
-						return nil, err
+						return nil, &ValueError{string(potentFlagValue), nonBool, err}
 					}
 				}
 			default:
-				return nil, fmt.Errorf("error: invalid argument %q. long flags cannot be passed together in the same argument and cannot take values in the same argument without being seperated by \"=\"", baldArg)
+				return nil, &ArgError{baldArg, ErrLongGlued}
 			}
 		case c.TakesValue:
 			if c.CanBeMultiple || !c.Seen {
 				c.Seen = true
 			} else {
-				return nil, fmt.Errorf("error: flag %q can only be used once", arg)
+				return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
 			}
 			if i == len(inputArgs)-1 {
-				return nil, fmt.Errorf("error: flag %q requires a value", arg)
+				return nil, &FlagError{Flag: baldArg, Err: ErrNeedValue}
 			}
-			if err := CheckValue(arg, arg, inputArgs[i+1], c); err != nil {
-				return nil, err
+			if err := CheckValue(inputArgs[i+1], c); err != nil {
+				return nil, &ValueError{inputArgs[i+1], baldArg, err}
 			} else {
 				consumedArgs = append(consumedArgs, i+1)
 			}
@@ -289,12 +289,16 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 	return nil, nil
 }
 
-func CheckValue(argIn string, flg string, value string, flgEntry *Flag) error {
+func CheckValue(value string, flgEntry *Flag) error {
 	switch flgEntry.ValType {
 	case 0:
 		flagNum, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("error: invalid argument %q: flag %q requires an integer value", argIn, flg)
+			if errors.Is(err, strconv.ErrRange) {
+				return ErrTooLarge
+			} else {
+				return ErrNeedInt
+			}
 		}
 		flgEntry.Value = flagNum
 		return nil
@@ -302,10 +306,11 @@ func CheckValue(argIn string, flg string, value string, flgEntry *Flag) error {
 		flgEntry.Value = value
 		return nil
 	case 2:
-		err := ParseSize(value, flgEntry)
+		bytes, err := ParseSize(value)
 		if err != nil {
 			return err
 		}
+		flgEntry.Value = bytes
 	default:
 		panic(fmt.Sprintf("THIS SHOULD HAVE NEVER BEEN HIT!!! FLAG TYPE SHOULD NEVER BE %v!!!!", flgEntry.ValType))
 	}

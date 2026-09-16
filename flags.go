@@ -17,6 +17,61 @@ type Flag struct {
 	CanBeMultiple bool
 }
 
+func (e *FlagError) Error() string {
+	return fmt.Sprintf("error: flag %s: %v", e.Flag, e.Err)
+}
+
+func (e *ArgError) Error() string {
+	return fmt.Sprintf("error: argument %q: %v", e.Arg, e.Err)
+}
+
+func (e *SizeError) Error() string {
+	return fmt.Sprintf("error: invalid size %q: %v", e.Size, e.Err)
+}
+
+func (e *FlagError) Unwrap() error {
+	return e.Err
+}
+
+func (e *ArgError) Unwrap() error {
+	return e.Err
+}
+
+func (e *SizeError) Unwrap() error {
+	return e.Err
+}
+
+type SizeError struct {
+	Size string
+	Err  error
+}
+
+var (
+	ErrUnknown          = errors.New("flag not recognized")
+	ErrFlagAfterNonFlag = errors.New("all arguments must come before paths. use \"--\" before paths beginning with \"-\"")
+	ErrLongGlued        = errors.New("long flags cannot be passed together in the same argument and cannot take values in the same argument without being seperated by \"=\"")
+	ErrNoTakeValue      = errors.New("flag cannot take a value")
+	ErrNeedValue        = errors.New("flag requires a value")
+	ErrDupe             = errors.New("flags can only be used once")
+)
+
+var (
+	ErrTooLarge  = errors.New("value is too large")
+	ErrNegative  = errors.New("value cannot be negative")
+	ErrNoNum     = errors.New("value must begin with a number")
+	ErrBadSuffix = errors.New("invalid suffix. suffixes must be uppercase")
+)
+
+type ArgError struct {
+	Arg string
+	Err error
+}
+
+type FlagError struct {
+	Flag string
+	Err  error
+}
+
 /* var (
 	verbose   = &Flag{}
 	noRound   = &Flag{}
@@ -67,11 +122,11 @@ type flagRegistry map[string]*Flag
 func ParseSize(input string, s *Flag) error {
 	bytes, err := strconv.Atoi(input)
 	if errors.Is(err, strconv.ErrRange) {
-		return fmt.Errorf("error: value %q is too large", input)
+		return &SizeError{input, ErrTooLarge}
 	}
 	if err != nil || bytes < 0 {
 		if strings.HasPrefix(input, "-") {
-			return fmt.Errorf("error: invalid value %q. value of -s cannot be negative", input)
+			return &SizeError{input, ErrNegative}
 		}
 		allNums := false
 		val := []byte{}
@@ -83,35 +138,31 @@ func ParseSize(input string, s *Flag) error {
 						allNums = true
 					}
 				} else {
-					return fmt.Errorf("error: invalid value %q. value of -s must begin with a number", input)
+					return &SizeError{input, ErrNoNum}
 				}
 			} else {
-				if i == len(input)-1 {
-					baseNum, _ := strconv.Atoi(string(val))
-					switch string(input[i]) {
-					case "B":
-						s.Value = baseNum
-						return nil
-					case "K":
-						s.Value = 1000 * baseNum
-						return nil
-					case "M":
-						s.Value = 1000 * 1000 * baseNum
-						return nil
-					case "G":
-						s.Value = 1000 * 1000 * 1000 * baseNum
-						return nil
-					case "T":
-						s.Value = 1000 * 1000 * 1000 * 1000 * baseNum
-						return nil
-					case "P":
-						s.Value = 1000 * 1000 * 1000 * 1000 * 1000 * baseNum
-						return nil
-					default:
-						return fmt.Errorf("error: invalid value %q. unrecognized suffix %q. suffixes must be uppercase", input, string(input[i]))
-					}
-				} else {
-					return fmt.Errorf("error: invalid value %q. suffix for size must be one uppercase character", input)
+				baseNum, _ := strconv.Atoi(string(val))
+				switch string(input[i]) {
+				case "B":
+					s.Value = baseNum
+					return nil
+				case "K":
+					s.Value = 1000 * baseNum
+					return nil
+				case "M":
+					s.Value = 1000 * 1000 * baseNum
+					return nil
+				case "G":
+					s.Value = 1000 * 1000 * 1000 * baseNum
+					return nil
+				case "T":
+					s.Value = 1000 * 1000 * 1000 * 1000 * baseNum
+					return nil
+				case "P":
+					s.Value = 1000 * 1000 * 1000 * 1000 * 1000 * baseNum
+					return nil
+				default:
+					return &SizeError{input, ErrBadSuffix}
 				}
 			}
 		}

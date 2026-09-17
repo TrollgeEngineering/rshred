@@ -9,6 +9,12 @@ import (
 	"unicode"
 )
 
+const (
+	valueInt = iota
+	valueString
+	valueSize
+)
+
 type Flag struct {
 	TakesValue    bool
 	Seen          bool
@@ -291,7 +297,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 
 func CheckValue(value string, flgEntry *Flag) error {
 	switch flgEntry.ValType {
-	case 0:
+	case valueInt:
 		flagNum, err := strconv.Atoi(value)
 		if err != nil {
 			if errors.Is(err, strconv.ErrRange) {
@@ -302,10 +308,10 @@ func CheckValue(value string, flgEntry *Flag) error {
 		}
 		flgEntry.Value = flagNum
 		return nil
-	case 1:
+	case valueString:
 		flgEntry.Value = value
 		return nil
-	case 2:
+	case valueSize:
 		bytes, err := ParseSize(value)
 		if err != nil {
 			return err

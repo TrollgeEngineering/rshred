@@ -9,8 +9,10 @@ import (
 	"unicode"
 )
 
+type FlagValueType int
+
 const (
-	valueInt = iota
+	valueInt FlagValueType = iota
 	valueString
 	valueSize
 )
@@ -18,7 +20,7 @@ const (
 type Flag struct {
 	TakesValue    bool
 	Seen          bool
-	ValType       int
+	ValType       FlagValueType
 	Value         any
 	CanBeMultiple bool
 }
@@ -58,12 +60,13 @@ type ValueError struct {
 }
 
 var (
-	ErrUnknown          = errors.New("flag not recognized")
-	ErrFlagAfterNonFlag = errors.New("all arguments must come before paths. use \"--\" before paths beginning with \"-\"")
-	ErrLongGlued        = errors.New("long flags cannot be passed together in the same argument and cannot take values in the same argument without being seperated by \"=\"")
-	ErrNoTakeValue      = errors.New("flag cannot take a value")
-	ErrNeedValue        = errors.New("flag requires a value")
-	ErrDupe             = errors.New("flags can only be used once")
+	ErrUnknown               = errors.New("flag not recognized")
+	ErrFlagAfterNonFlag      = errors.New("all arguments must come before paths. use \"--\" before paths beginning with \"-\"")
+	ErrLongGlued             = errors.New("long flags cannot be passed together in the same argument and cannot take values in the same argument without being seperated by \"=\"")
+	ErrNoTakeValue           = errors.New("flag cannot take a value")
+	ErrNoTakeValueTryHyphens = errors.New("flag cannot take a value. all arguments must come before paths. use \"--\" before paths beginning with \"-\"")
+	ErrNeedValue             = errors.New("flag requires a value")
+	ErrDupe                  = errors.New("flags can only be used once")
 )
 
 var (
@@ -203,11 +206,38 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 			long = false
 			baldArg = strings.TrimPrefix(arg, "-")
 		default:
-			for i := i; i < len(inputArgs); i++ {
-				if !strings.HasPrefix(inputArgs[i], "-") {
-					leftoverArgs = append(leftoverArgs, inputArgs[i])
+			for j := i; j < len(inputArgs); j++ {
+				if !strings.HasPrefix(inputArgs[j], "-") {
+					leftoverArgs = append(leftoverArgs, inputArgs[j])
 				} else {
-					return nil, &ArgError{inputArgs[i], ErrFlagAfterNonFlag}
+					switch {
+					case i == 0:
+						return nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
+					case strings.HasPrefix(inputArgs[i-1], "--"):
+						test, ok := registry[strings.TrimPrefix(inputArgs[i-1], "--")]
+						if ok {
+							if test.TakesValue {
+								panic("if it takes a value, then it should have been marked consumed.")
+							}
+							return nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
+						} else {
+							return nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
+						}
+					case strings.HasPrefix(inputArgs[i-1], "-"):
+						test, ok := registry[string(inputArgs[i-1][len(inputArgs[i-1])-1])] // Checks the last character of the last good argument.
+						if ok {
+							if test.TakesValue {
+								panic("if it takes a value, then it should have already been marked consumed or rejected")
+							}
+							return nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
+						} else {
+							return nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
+						}
+					case slices.Contains(consumedArgs, i-1):
+						return nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
+					default:
+						panic("all args before the last good arg need to either be flag arguments or consumed values")
+					}
 				}
 			}
 			return leftoverArgs, nil
@@ -255,16 +285,25 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 						if cNonLong.CanBeMultiple || !cNonLong.Seen {
 							cNonLong.Seen = true
 						} else {
-							return nil, &FlagError{baldArg, string(baldArg), ErrDupe}
+							return nil, &FlagError{baldArg, string(baldArg[i]), ErrDupe}
 						}
 					} else {
 						potentFlagValue = append(potentFlagValue, baldArg[i])
 					}
 				}
 				if nonBoolFlagFound {
-					err := CheckValue(string(potentFlagValue), registry[nonBool])
-					if err != nil {
-						return nil, &ValueError{string(potentFlagValue), nonBool, err}
+					var valErr error
+					if len(potentFlagValue) < 1 {
+						if i == len(inputArgs)-1 {
+							return nil, &FlagError{baldArg, nonBool, ErrNeedValue}
+						}
+						consumedArgs = append(consumedArgs, i+1)
+						valErr = CheckValue(inputArgs[i+1], registry[nonBool])
+					} else {
+						valErr = CheckValue(string(potentFlagValue), registry[nonBool])
+					}
+					if valErr != nil {
+						return nil, &FlagError{baldArg, nonBool, valErr}
 					}
 				}
 			default:
@@ -288,7 +327,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 			if c.CanBeMultiple || !c.Seen {
 				c.Seen = true
 			} else {
-				return nil, fmt.Errorf("error: flag %q can only be used once", arg)
+				return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
 			}
 		}
 	}

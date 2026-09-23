@@ -21,9 +21,11 @@ type Flag struct {
 	TakesValue    bool
 	Seen          bool
 	ValType       FlagValueType
+	Default       any
 	Value         any
 	CanBeMultiple bool
 }
+type flagRegistry map[string]*Flag
 
 func (e *FlagError) Error() string {
 	if e.Arg != "" {
@@ -123,17 +125,23 @@ type FlagError struct {
 	}
 ) */
 
-type flagRegistry map[string]*Flag
-
-/* var behaviors struct {
-	Verbose    bool // -v flag
-	NoRound    bool // -x flag
-	ZeroPass   bool // -z flag
-	Deallocate bool // -u flag
-	Force      bool // -f flag
-	Passes     int  // -n flag
-	ShredSize  int  // -s flag
-} */
+/*
+	 var behaviors struct {
+		Verbose    bool // -v flag
+		NoRound    bool // -x flag
+		ZeroPass   bool // -z flag
+		Deallocate bool // -u flag
+		Force      bool // -f flag
+		Passes     int  // -n flag
+		ShredSize  int  // -s flag
+	}
+*/
+func reset(registry flagRegistry) {
+	for _, flg := range registry {
+		flg.Value = flg.Default
+		flg.Seen = false
+	}
+}
 
 func ParseSize(input string) (int, error) {
 	bytes, err := strconv.Atoi(input)
@@ -182,7 +190,12 @@ func ParseSize(input string) (int, error) {
 	}
 }
 
-func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
+func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, parseErr error) {
+	defer func() {
+		if parseErr != nil {
+			reset(registry)
+		}
+	}()
 	var (
 		long         bool
 		consumedArgs = []int{}
@@ -335,6 +348,9 @@ func ParseFlags(inputArgs []string, registry flagRegistry) ([]string, error) {
 }
 
 func CheckValue(value string, flgEntry *Flag) error {
+	if value == "" {
+		return ErrNeedValue
+	}
 	switch flgEntry.ValType {
 	case valueInt:
 		flagNum, err := strconv.Atoi(value)

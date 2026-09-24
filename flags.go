@@ -230,7 +230,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, p
 						test, ok := registry[strings.TrimPrefix(inputArgs[i-1], "--")]
 						if ok {
 							if test.TakesValue {
-								panic("if it takes a value, then it should have been marked consumed.")
+								panic("if it takes a value, then it should have been marked consumed or rejected.")
 							}
 							return nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
 						} else {

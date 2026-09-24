@@ -12,16 +12,17 @@ import (
 	"syscall"
 
 	"codeberg.org/TrollgeEngineering/rshred/internal/permchk"
+	"codeberg.org/TrollgeEngineering/sflag"
 )
 
 var (
-	verbose   = &Flag{}
-	noRound   = &Flag{}
-	zeroPass  = &Flag{}
-	deallo    = &Flag{}
-	force     = &Flag{}
-	passes    = &Flag{TakesValue: true, ValType: 0, Value: 3}
-	ShredSize = &Flag{TakesValue: true, ValType: 2, Value: -1}
+	verbose   = &sflag.Flag{}
+	noRound   = &sflag.Flag{}
+	zeroPass  = &sflag.Flag{}
+	deallo    = &sflag.Flag{}
+	force     = &sflag.Flag{}
+	passes    = &sflag.Flag{TakesValue: true, ValType: 0, Value: 3, Default: 3}
+	ShredSize = &sflag.Flag{TakesValue: true, ValType: 2, Value: -1, Default: -1}
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 	dirSticky        []string
 )
 
-var rshredRegistry = flagRegistry{
+var rshredRegistry = sflag.FlagRegistry{
 	"v":       verbose,
 	"verbose": verbose,
 
@@ -53,11 +54,11 @@ var rshredRegistry = flagRegistry{
 	"s":    ShredSize,
 	"size": ShredSize,
 	// Non-interactive only flags below.
-	"help": &Flag{},
+	"help": &sflag.Flag{},
 
-	"version": &Flag{},
+	"version": &sflag.Flag{},
 
-	"shut-up": &Flag{},
+	"shut-up": &sflag.Flag{},
 }
 
 const rVersion = "v4.0.0"
@@ -80,7 +81,7 @@ var rshredConf = ConfigSpec{
 	&Config{Key: "RemoveDirectories", Default: "OFF", Comment: []string{"Attempts to remove all empty directories if the -u flag is used."}},
 }
 
-func DecideInteract(args []string) int {
+func decideInteract(args []string) int {
 	if len(args) > 0 {
 		return cli(args)
 	} else {
@@ -327,7 +328,7 @@ func interact() int {
 	fmt.Println("-z, --zero -- overwrite the file with null bytes (0x00 or 00000000) after random shredding.")
 	for {
 		interactArgs := strings.Fields(QueryUser("\nPlease enter the flags you would like to use."))
-		extraArgs, err := ParseFlags(interactArgs, rshredRegistry)
+		extraArgs, err := sflag.ParseFlags(interactArgs, rshredRegistry)
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -398,5 +399,5 @@ func interact() int {
 }
 
 func main() {
-	os.Exit(DecideInteract(os.Args[1:]))
+	os.Exit(decideInteract(os.Args[1:]))
 }

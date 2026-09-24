@@ -12,9 +12,9 @@ import (
 type FlagValueType int
 
 const (
-	valueInt FlagValueType = iota
-	valueString
-	valueSize
+	ValueInt FlagValueType = iota
+	ValueString
+	ValueSize
 )
 
 type Flag struct {
@@ -25,7 +25,7 @@ type Flag struct {
 	Value         any
 	CanBeMultiple bool
 }
-type flagRegistry map[string]*Flag
+type FlagRegistry map[string]*Flag
 
 func (e *FlagError) Error() string {
 	if e.Arg != "" {
@@ -101,7 +101,7 @@ type FlagError struct {
 ) */
 
 /* var (
-	flagRegistry = map[string]*Flag{
+	FlagRegistry = map[string]*Flag{
 		"v":       verbose,
 		"verbose": verbose,
 
@@ -136,14 +136,14 @@ type FlagError struct {
 		ShredSize  int  // -s flag
 	}
 */
-func reset(registry flagRegistry) {
+func reset(registry FlagRegistry) {
 	for _, flg := range registry {
 		flg.Value = flg.Default
 		flg.Seen = false
 	}
 }
 
-func ParseSize(input string) (int, error) {
+func parseSize(input string) (int, error) {
 	bytes, err := strconv.Atoi(input)
 	if errors.Is(err, strconv.ErrRange) {
 		return 0, ErrTooLarge
@@ -190,7 +190,7 @@ func ParseSize(input string) (int, error) {
 	}
 }
 
-func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, parseErr error) {
+func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, parseErr error) {
 	defer func() {
 		if parseErr != nil {
 			reset(registry)
@@ -273,7 +273,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, p
 				} else {
 					return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
 				}
-				err := CheckValue(splitEqualsFlag[1], cEquals)
+				err := checkValue(splitEqualsFlag[1], cEquals)
 				if err != nil {
 					return nil, &ValueError{splitEqualsFlag[1], splitEqualsFlag[0], err}
 				}
@@ -311,9 +311,9 @@ func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, p
 							return nil, &FlagError{baldArg, nonBool, ErrNeedValue}
 						}
 						consumedArgs = append(consumedArgs, i+1)
-						valErr = CheckValue(inputArgs[i+1], registry[nonBool])
+						valErr = checkValue(inputArgs[i+1], registry[nonBool])
 					} else {
-						valErr = CheckValue(string(potentFlagValue), registry[nonBool])
+						valErr = checkValue(string(potentFlagValue), registry[nonBool])
 					}
 					if valErr != nil {
 						return nil, &FlagError{baldArg, nonBool, valErr}
@@ -331,7 +331,7 @@ func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, p
 			if i == len(inputArgs)-1 {
 				return nil, &FlagError{Flag: baldArg, Err: ErrNeedValue}
 			}
-			if err := CheckValue(inputArgs[i+1], c); err != nil {
+			if err := checkValue(inputArgs[i+1], c); err != nil {
 				return nil, &ValueError{inputArgs[i+1], baldArg, err}
 			} else {
 				consumedArgs = append(consumedArgs, i+1)
@@ -347,12 +347,12 @@ func ParseFlags(inputArgs []string, registry flagRegistry) (leftover []string, p
 	return nil, nil
 }
 
-func CheckValue(value string, flgEntry *Flag) error {
+func checkValue(value string, flgEntry *Flag) error {
 	if value == "" {
 		return ErrNeedValue
 	}
 	switch flgEntry.ValType {
-	case valueInt:
+	case ValueInt:
 		flagNum, err := strconv.Atoi(value)
 		if err != nil {
 			if errors.Is(err, strconv.ErrRange) {
@@ -363,11 +363,11 @@ func CheckValue(value string, flgEntry *Flag) error {
 		}
 		flgEntry.Value = flagNum
 		return nil
-	case valueString:
+	case ValueString:
 		flgEntry.Value = value
 		return nil
-	case valueSize:
-		bytes, err := ParseSize(value)
+	case ValueSize:
+		bytes, err := parseSize(value)
 		if err != nil {
 			return err
 		}

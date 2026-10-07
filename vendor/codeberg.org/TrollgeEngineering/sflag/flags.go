@@ -1,3 +1,4 @@
+// Package sflag parses command line arguments passed by the user with support for flag gluing and short and long flags.
 package sflag
 
 import (
@@ -25,6 +26,8 @@ type Flag struct {
 	Value         any
 	CanBeMultiple bool
 }
+
+// FlagRegistry is the registry of flags passed to ParseFlags.
 type FlagRegistry map[string]*Flag
 
 func (e *FlagError) Error() string {
@@ -69,6 +72,7 @@ var (
 	ErrNoTakeValueTryHyphens = errors.New("flag cannot take a value. all arguments must come before paths. use \"--\" before paths beginning with \"-\"")
 	ErrNeedValue             = errors.New("flag requires a value")
 	ErrDupe                  = errors.New("flags can only be used once")
+	ErrShortTwoHyphen        = errors.New("single character flags must be invoked using a single \"-\"")
 )
 
 var (
@@ -136,13 +140,27 @@ type FlagError struct {
 		ShredSize  int  // -s flag
 	}
 */
+// Marks a flag as seen if it's either allowed to appear more than once or hasn't already been seen. Returns ErrDupe if not.
+func markSeen(flag *Flag) error {
+	if flag.CanBeMultiple || !flag.Seen {
+		flag.Seen = true
+		return nil
+	} else {
+		return ErrDupe
+	}
+}
+
+// Resets the flag registry by setting all values to their defaults and marking them unseen.
 func reset(registry FlagRegistry) {
 	for _, flg := range registry {
-		flg.Value = flg.Default
+		if flg.TakesValue {
+			flg.Value = flg.Default
+		}
 		flg.Seen = false
 	}
 }
 
+// Parses the size value type.
 func parseSize(input string) (int, error) {
 	bytes, err := strconv.Atoi(input)
 	if errors.Is(err, strconv.ErrRange) {
@@ -190,6 +208,7 @@ func parseSize(input string) (int, error) {
 	}
 }
 
+// ParseFlags is the main function for parsing flags. Hosts logic for collecting leftover args, watching for common mistakes, and parsing values.
 func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, parseErr error) {
 	defer func() {
 		if parseErr != nil {
@@ -197,7 +216,6 @@ func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, p
 		}
 	}()
 	var (
-		long         bool
 		consumedArgs = []int{}
 		leftoverArgs = []string{}
 		baldArg      string
@@ -206,18 +224,108 @@ func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, p
 	for i, arg := range inputArgs {
 		switch {
 		case arg == "--":
-			for i := i + 1; i < len(inputArgs); i++ {
-				leftoverArgs = append(leftoverArgs, inputArgs[i])
-			}
-			return leftoverArgs, nil
+			return inputArgs[i+1:], nil
 		case slices.Contains(consumedArgs, i):
 			continue
 		case strings.HasPrefix(arg, "--"):
-			long = true
 			baldArg = strings.TrimPrefix(arg, "--")
+			if len(baldArg) <= 1 {
+				return nil, &FlagError{Flag: baldArg, Err: ErrShortTwoHyphen}
+			}
+			c, ok := registry[baldArg]
+			switch {
+			case ok:
+				if c.TakesValue {
+					if i == len(inputArgs)-1 {
+						return nil, &FlagError{Flag: baldArg, Err: ErrNeedValue}
+					}
+					err := checkValue(inputArgs[i+1], c)
+					if err != nil {
+						return nil, &ValueError{inputArgs[i+1], baldArg, err}
+					}
+				}
+				if err := markSeen(c); err != nil {
+					return nil, &FlagError{Flag: baldArg, Err: err}
+				}
+			case strings.Contains(baldArg, "="):
+				flag, value, _ := strings.Cut(baldArg, "=")
+				cEquals, ok := registry[flag]
+				if !ok {
+					return nil, &ArgError{baldArg, ErrUnknown}
+				}
+				if err := markSeen(cEquals); err != nil {
+					return nil, &FlagError{baldArg, flag, err}
+				}
+				if err := checkValue(value, cEquals); err != nil {
+					return nil, &ValueError{value, flag, err}
+				}
+			default:
+				for flag := range registry {
+					if strings.Contains(baldArg, flag) {
+						return nil, &ArgError{baldArg, ErrLongGlued}
+					}
+				}
+				return nil, &ArgError{baldArg, ErrUnknown}
+			}
 		case strings.HasPrefix(arg, "-"):
-			long = false
 			baldArg = strings.TrimPrefix(arg, "-")
+			c, ok := registry[baldArg]
+			switch {
+			case ok:
+				if c.TakesValue {
+					if i == len(inputArgs)-1 {
+						return nil, &FlagError{Flag: baldArg, Err: ErrNeedValue}
+					}
+					if err := checkValue(inputArgs[i+1], c); err != nil {
+						return nil, &ValueError{inputArgs[i+1], baldArg, err}
+					} else {
+						consumedArgs = append(consumedArgs, i+1)
+					}
+				}
+				if err := markSeen(c); err != nil {
+					return nil, &FlagError{Flag: baldArg, Err: err}
+				}
+			case len(baldArg) > 1:
+				nonBoolFlagFound := false
+				var nonBool string
+				for j := 0; j < len(baldArg); j++ {
+					cGlued, ok := registry[string(baldArg[j])]
+					if !ok {
+						if j == 0 {
+							return nil, &FlagError{baldArg, string(baldArg[j]), ErrUnknown}
+						} else {
+							return nil, &FlagError{baldArg, string(baldArg[j-1]), ErrNoTakeValue}
+						}
+					}
+					if cGlued.TakesValue {
+						nonBoolFlagFound = true
+						nonBool = string(baldArg[j])
+						if err := checkValue(string(baldArg[j+1:]), cGlued); err != nil {
+							if errors.Is(err, ErrNeedValue) {
+								if i == len(inputArgs)-1 {
+									return nil, &FlagError{baldArg, nonBool, ErrNeedValue}
+								} else {
+									if valErr := checkValue(inputArgs[i+1], cGlued); valErr != nil {
+										return nil, &ValueError{inputArgs[i+1], string(baldArg[j]), valErr}
+									} else {
+										consumedArgs = append(consumedArgs, i+1)
+									}
+								}
+							} else {
+								return nil, &ValueError{string(baldArg[j+1:]), string(baldArg[j]), err}
+							}
+						}
+					}
+					if err := markSeen(cGlued); err != nil {
+						return nil, &FlagError{baldArg, string(baldArg[j]), err}
+					}
+					if nonBoolFlagFound {
+						break
+					}
+				}
+			default:
+				return nil, &ArgError{baldArg, ErrUnknown}
+			}
 		default:
 			for j := i; j < len(inputArgs); j++ {
 				if !strings.HasPrefix(inputArgs[j], "-") {
@@ -230,7 +338,7 @@ func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, p
 						test, ok := registry[strings.TrimPrefix(inputArgs[i-1], "--")]
 						if ok {
 							if test.TakesValue {
-								panic("if it takes a value, then it should have been marked consumed or rejected.")
+								panic("if it takes a value, then it should have already been marked consumed or rejected.")
 							}
 							return nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
 						} else {
@@ -249,104 +357,17 @@ func ParseFlags(inputArgs []string, registry FlagRegistry) (leftover []string, p
 					case slices.Contains(consumedArgs, i-1):
 						return nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
 					default:
-						panic("all args before the last good arg need to either be flag arguments or consumed values")
+						panic("last good arg must be a flag, flag group, or consumed value")
 					}
 				}
 			}
 			return leftoverArgs, nil
 		}
-		c, ok := registry[baldArg]
-		switch {
-		case !ok:
-			if len(baldArg) <= 1 {
-				return nil, &ArgError{baldArg, ErrUnknown}
-			}
-			switch {
-			case strings.Contains(arg, "="):
-				splitEqualsFlag := strings.SplitN(baldArg, "=", 2)
-				cEquals, ok := registry[splitEqualsFlag[0]]
-				if !ok {
-					return nil, &ArgError{baldArg, ErrUnknown}
-				}
-				if cEquals.CanBeMultiple || !cEquals.Seen {
-					cEquals.Seen = true
-				} else {
-					return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
-				}
-				err := checkValue(splitEqualsFlag[1], cEquals)
-				if err != nil {
-					return nil, &ValueError{splitEqualsFlag[1], splitEqualsFlag[0], err}
-				}
-			case !long:
-				potentFlagValue := []byte{}
-				nonBoolFlagFound := false
-				var nonBool string
-				for i := 0; i < len(baldArg); i++ {
-					if !nonBoolFlagFound {
-						cNonLong, ok := registry[string(baldArg[i])]
-						if !ok {
-							if i == 0 {
-								return nil, &FlagError{baldArg, string(baldArg[i]), ErrUnknown}
-							} else {
-								return nil, &FlagError{baldArg, string(baldArg[i-1]), ErrNoTakeValue}
-							}
-						}
-						if cNonLong.TakesValue {
-							nonBoolFlagFound = true
-							nonBool = string(baldArg[i])
-						}
-						if cNonLong.CanBeMultiple || !cNonLong.Seen {
-							cNonLong.Seen = true
-						} else {
-							return nil, &FlagError{baldArg, string(baldArg[i]), ErrDupe}
-						}
-					} else {
-						potentFlagValue = append(potentFlagValue, baldArg[i])
-					}
-				}
-				if nonBoolFlagFound {
-					var valErr error
-					if len(potentFlagValue) < 1 {
-						if i == len(inputArgs)-1 {
-							return nil, &FlagError{baldArg, nonBool, ErrNeedValue}
-						}
-						consumedArgs = append(consumedArgs, i+1)
-						valErr = checkValue(inputArgs[i+1], registry[nonBool])
-					} else {
-						valErr = checkValue(string(potentFlagValue), registry[nonBool])
-					}
-					if valErr != nil {
-						return nil, &FlagError{baldArg, nonBool, valErr}
-					}
-				}
-			default:
-				return nil, &ArgError{baldArg, ErrLongGlued}
-			}
-		case c.TakesValue:
-			if c.CanBeMultiple || !c.Seen {
-				c.Seen = true
-			} else {
-				return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
-			}
-			if i == len(inputArgs)-1 {
-				return nil, &FlagError{Flag: baldArg, Err: ErrNeedValue}
-			}
-			if err := checkValue(inputArgs[i+1], c); err != nil {
-				return nil, &ValueError{inputArgs[i+1], baldArg, err}
-			} else {
-				consumedArgs = append(consumedArgs, i+1)
-			}
-		default:
-			if c.CanBeMultiple || !c.Seen {
-				c.Seen = true
-			} else {
-				return nil, &FlagError{Flag: baldArg, Err: ErrDupe}
-			}
-		}
 	}
 	return nil, nil
 }
 
+// Validates the passed value against the Flag, and sets the Flag's Value, or returns an error if the value is invalid.
 func checkValue(value string, flgEntry *Flag) error {
 	if value == "" {
 		return ErrNeedValue

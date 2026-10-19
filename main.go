@@ -16,50 +16,11 @@ import (
 )
 
 var (
-	verbose   = &sflag.Flag{}
-	noRound   = &sflag.Flag{}
-	zeroPass  = &sflag.Flag{}
-	deallo    = &sflag.Flag{}
-	force     = &sflag.Flag{}
-	passes    = &sflag.Flag{TakesValue: true, ValType: 0, Value: 3, Default: 3}
-	ShredSize = &sflag.Flag{TakesValue: true, ValType: 2, Value: -1, Default: -1}
-)
-
-var (
 	fileNoWrite      []string
 	dirNoReadAndExec []string
 	dirNoWrite       []string
 	dirSticky        []string
 )
-
-var rshredRegistry = sflag.FlagRegistry{
-	"v":       verbose,
-	"verbose": verbose,
-
-	"x":     noRound,
-	"exact": noRound,
-
-	"z":    zeroPass,
-	"zero": zeroPass,
-
-	"u":      deallo,
-	"remove": deallo,
-
-	"f":     force,
-	"force": force,
-
-	"n":      passes,
-	"passes": passes,
-
-	"s":    ShredSize,
-	"size": ShredSize,
-	// Non-interactive only flags below.
-	"help": &sflag.Flag{},
-
-	"version": &sflag.Flag{},
-
-	"shut-up": &sflag.Flag{},
-}
 
 const rVersion = "v4.0.0"
 
@@ -328,17 +289,17 @@ func interact() int {
 	fmt.Println("-z, --zero -- overwrite the file with null bytes (0x00 or 00000000) after random shredding.")
 	for {
 		interactArgs := strings.Fields(QueryUser("\nPlease enter the flags you would like to use."))
-		extraArgs, err := sflag.ParseFlags(interactArgs, rshredRegistry)
+		results, leftover, err := sflag.Parse(interactArgs)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
-		if len(extraArgs) > 0 {
+		if len(leftover) > 0 {
 			extraFiles := []string{}
 			fmt.Println("----------------------\nEXTRA ITEMS\n----------------------")
 			var warnPrefix string
 			var badFound bool
-			for _, item := range extraArgs {
+			for _, item := range leftover {
 				warnPrefix = ""
 				badFound = false
 				perms, err := permchk.CheckPerm(item)
@@ -378,7 +339,7 @@ func interact() int {
 					extraFiles = append(extraFiles, item)
 				}
 			}
-			if YesOrNo(false, "The following extra arguments were found in your argument input: %v.\n\nThe above list shows all the files or directories, if any, that were able to be recognized from your extra arguments. Would you like to add them to the shred?", strings.Join(extraArgs, ", ")) {
+			if YesOrNo(false, "The following extra arguments were found in your argument input: %v.\n\nThe above list shows all the files or directories, if any, that were able to be recognized from your extra arguments. Would you like to add them to the shred?", strings.Join(leftover, ", ")) {
 				for _, file := range extraFiles {
 					shredVictims[file] = 0
 				}

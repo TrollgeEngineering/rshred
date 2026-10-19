@@ -12,9 +12,9 @@ func Shred(file *os.File, zero bool, depth int, bufSize int) error {
 	var amount int64
 	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("error getting file info")
+		return fmt.Errorf("failed to get file info")
 	} else if info.IsDir() {
-		return fmt.Errorf("error: target is a directory")
+		return fmt.Errorf("target is a directory")
 	}
 	if (info.Size() > int64(depth)) && depth != -1 {
 		amount = int64(depth)
@@ -36,13 +36,13 @@ func Shred(file *os.File, zero bool, depth int, bufSize int) error {
 			n = buf
 		}
 		if wrote, err := file.Write(n); err != nil {
-			return fmt.Errorf("error occured writing to file")
+			return fmt.Errorf("failed to write to file")
 		} else {
 			written = written + int64(wrote)
 		}
-		if err := file.Sync(); err != nil {
-			return fmt.Errorf("error occured syncing file")
-		}
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file writes")
 	}
 	return nil
 }

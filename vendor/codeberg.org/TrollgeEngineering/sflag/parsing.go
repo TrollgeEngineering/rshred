@@ -1,10 +1,3 @@
-// Package sflag parses command-line flags against a registry the caller supplies.
-// sflag does not have any preregistered or built-in flags such as --help, so they must be supplied by the developer.
-//
-// Flags are registered using the [Register] function. Optionally, a long flag may be paired
-// with a short flag during registration using [RegisterWithShort].
-//
-// Flags may be registered with one of 5 value types, [ValueBool], [ValueBoolCount], [ValueInt], [ValueString], and [ValueSize].
 package sflag
 
 import (
@@ -32,20 +25,30 @@ import (
 // will reject interspersed flags with [ErrFlagAfterNonFlag].
 func Parse(inputArgs []string) (results Results, leftover []string, parseErr error) {
 	if len(crntRegis.long) < 1 {
-		panicExternal("at least one flag must be registered before parsing")
+		panicExternal(ErrNeedRegis)
 	}
 	for longName, flag := range crntRegis.long {
 		for conflict := range flag.conflictsWith {
 			if conFlag, ok := crntRegis.long[conflict]; !ok {
-				panicExternal(fmt.Sprintf("conflicting flag %q on flag %q was not found. conflicting flags must be registered with their long name", conflict, flag.formal))
+				panicExternal(&FlagPanic{Long: longName, Problem: Conflict, Conflict: conflict, Err: ErrConflictNotRegis})
 			} else {
-				conFlag.conflictsWith[longName] = 0
+				conFlag.conflictsWith[longName] = struct{}{}
 			}
 		}
 	}
 	defer func() {
 		if parseErr != nil {
 			ResetResults()
+		} else {
+			for long, result := range crntResults {
+				flag, ok := crntRegis.long[long]
+				if !ok {
+					panicInternal(fmt.Sprintf("flag %q has a *Result but doesn't have a *flag", long))
+				}
+				if flag.valType == ValueBool && result.Seen && !result.ValueSeen {
+					result.Value = true
+				}
+			}
 		}
 	}()
 	var (
@@ -118,6 +121,11 @@ func Parse(inputArgs []string) (results Results, leftover []string, parseErr err
 			}
 		case strings.HasPrefix(arg, "-") && len(arg) > 1:
 			baldArg = strings.TrimPrefix(arg, "-")
+			for long := range crntRegis.long {
+				if baldArg == long {
+					return nil, nil, &ArgError{arg, ErrLongOneHyphen}
+				}
+			}
 			if len(baldArg) > 1 {
 				nonBoolFlagFound := false
 				var nonBool string
@@ -166,6 +174,7 @@ func Parse(inputArgs []string) (results Results, leftover []string, parseErr err
 							if err := checkValue(inputArgs[i+1], cGlued); err != nil {
 								return nil, nil, &ValueError{inputArgs[i+1], nonBool, err}
 							}
+							consumedArgs = append(consumedArgs, i+1)
 						default:
 							return nil, nil, &FlagError{arg, nonBool, ErrNeedValue}
 						}
@@ -205,7 +214,7 @@ func Parse(inputArgs []string) (results Results, leftover []string, parseErr err
 			}
 		default:
 			for j := i; j < len(inputArgs); j++ {
-				if !(strings.HasPrefix(inputArgs[j], "-") && len(inputArgs[j]) > 1) {
+				if !(strings.HasPrefix(inputArgs[j], "-") && len(inputArgs[j]) > 1) && !(inputArgs[i] == "true" || inputArgs[i] == "false") {
 					leftoverArgs = append(leftoverArgs, inputArgs[j])
 				} else {
 					switch {
@@ -214,18 +223,24 @@ func Parse(inputArgs []string) (results Results, leftover []string, parseErr err
 					case strings.HasPrefix(inputArgs[i-1], "--"):
 						test, ok := crntRegis.long[strings.TrimPrefix(inputArgs[i-1], "--")]
 						if ok {
-							if test.valueRequired {
+							switch {
+							case test.valueRequired:
 								panicInternal("if it requires a value, then it should have already been marked consumed or rejected.")
+							case test.valType == ValueBool && (inputArgs[i] == "true" || inputArgs[i] == "false"):
+								return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrMalformedValueTryHyphens}
 							}
 							return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
 						} else {
 							return nil, nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
 						}
 					case strings.HasPrefix(inputArgs[i-1], "-"):
-						test, ok := crntRegis.long[string(inputArgs[i-1][len(inputArgs[i-1])-1])] // Checks the last character of the last good argument.
-						if ok {
-							if test.valueRequired {
+						test, ok := crntRegis.short[inputArgs[i-1][len(inputArgs[i-1])-1]] // Checks the last character of the last good argument.
+						if ok && len(inputArgs[i-1]) == 1 && !slices.Contains(consumedArgs, i-1) {
+							switch {
+							case test.valueRequired:
 								panicInternal("if it requires a value, then it should have already been marked consumed or rejected")
+							case test.valType == ValueBool && (inputArgs[i] == "true" || inputArgs[i] == "false"):
+								return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrMalformedValueTryHyphens}
 							}
 							return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
 						} else {

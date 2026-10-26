@@ -13,6 +13,69 @@ import (
 // flag has a ValueType of [ValueSize].
 type Size uint64
 
+type valueType uint8
+
+// This block of constants lists the types of values
+// that can be registered in the ValueType field of [Options]
+// when a flag is registered with either [Register] or
+// [RegisterWithShort].
+const (
+	// ValueBool is a ValueType that can be set in [Options]
+	// that makes the flag able to accept values of either
+	// "true" or "false" during parsing. The Value field
+	// in the [Result] of a flag with ValueType ValueBool
+	// will have a concrete type of bool.
+	ValueBool valueType = iota
+	// ValueBoolCount is a ValueType that makes the Value
+	// field in the [Result] of the corresponding flag
+	// an int representing how many times the flag was seen.
+	// Flags of type ValueBoolCount can never take values.
+	ValueBoolCount
+	// ValueInt is a ValueType that is able to accept a value of
+	// any numeric ASCII string that can be stored as an int.
+	// The concrete type as stored in the Value field of the
+	// [Result] for this flag is int.
+	ValueInt
+	// ValueString is a ValueType that is able to accept
+	// a value of a string of any characters. The concrete
+	// type as stored in the varlue field of the [Result]
+	// for this flag is string.
+	ValueString
+	// ValueSize is a ValueType that is able to accept a value
+	// that represents a data size. Valid data sizes can either
+	// be purely numeric ASCII strings or numeric ASCII strings
+	// followed by either B (bytes), K (kibibytes), M (mebibytes),
+	// G (gibibytes), T (tebibytes), or P (pebibytes) without spaces
+	// between the numeric portion and the suffix. The numeric
+	// portion of the value must be able to fit in an int. After
+	// parsing, a [Size] representing the parsed size in bytes,
+	// multiplied by powers of 1024 according to the suffix
+	// will be stored in the Value field of the [Result]
+	// corresponding to the registered flag. If no suffix
+	// is included in the value passed to the flag, the string
+	// of numbers will be converted to a [Size] as a number of bytes
+	// without being multiplied by a power of 1024.
+	ValueSize
+	barrier
+)
+
+func (v valueType) String() string {
+	switch v {
+	case ValueBool:
+		return "ValueBool"
+	case ValueBoolCount:
+		return "ValueBoolCount"
+	case ValueInt:
+		return "ValueInt"
+	case ValueSize:
+		return "ValueSize"
+	case ValueString:
+		return "ValueString"
+	default:
+		panic(fmt.Sprintf("invalid value type %d", v))
+	}
+}
+
 func checkValue(value string, flgEntry *flag) error {
 	if value == "" {
 		return ErrNeedValue
@@ -37,14 +100,25 @@ func checkValue(value string, flgEntry *flag) error {
 			}
 		}
 		if flgEntry.canBeMultiple {
-			crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]int), flagNum)
+			if flgEntry.defaultVal != nil && !crntResults[flgEntry.formal].ValueSeen {
+				crntResults[flgEntry.formal].Value = []int{flagNum}
+			} else {
+				crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]int), flagNum)
+			}
 		} else {
 			crntResults[flgEntry.formal].Value = flagNum
 		}
 		return nil
 	case ValueString:
+		if strings.HasPrefix(value, "=") {
+			return ErrShortEquals
+		}
 		if flgEntry.canBeMultiple {
-			crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]string), value)
+			if flgEntry.defaultVal != nil && !crntResults[flgEntry.formal].ValueSeen {
+				crntResults[flgEntry.formal].Value = []string{value}
+			} else {
+				crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]string), value)
+			}
 		} else {
 			crntResults[flgEntry.formal].Value = value
 		}
@@ -55,12 +129,16 @@ func checkValue(value string, flgEntry *flag) error {
 			return err
 		}
 		if flgEntry.canBeMultiple {
-			crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]Size), bytes)
+			if flgEntry.defaultVal != nil && !crntResults[flgEntry.formal].ValueSeen {
+				crntResults[flgEntry.formal].Value = []Size{bytes}
+			} else {
+				crntResults[flgEntry.formal].Value = append(crntResults[flgEntry.formal].Value.([]Size), bytes)
+			}
 		} else {
 			crntResults[flgEntry.formal].Value = bytes
 		}
 	default:
-		panicExternal(fmt.Sprintf("invalid flag value type %v, but this should have been caught at registration", flgEntry.valType))
+		panicInternal(fmt.Sprintf("invalid value type %d, but this should have been a panic at registration", flgEntry.valType))
 	}
 	return nil // Shouldn't be reached.
 }

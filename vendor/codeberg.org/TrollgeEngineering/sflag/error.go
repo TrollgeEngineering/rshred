@@ -129,7 +129,7 @@ var (
 	ErrContradict = errors.New("these two flags contradict")
 	// ErrShortEquals is wrapped in an error returned by [Parse] when a short flag (e.g. "-n") is passed a
 	// value using "=" (e.g. "-n=5").
-	ErrShortEquals = errors.New("\"=\" cannot be used to pass values to short flags")
+	ErrShortEquals = errors.New("\"=\" cannot be used to pass values to short flags. use long flags or put the value in the next argument to pass strings beginning with \"=\"")
 )
 
 var (

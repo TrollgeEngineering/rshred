@@ -15,6 +15,23 @@ import (
 	"codeberg.org/TrollgeEngineering/sflag"
 )
 
+func registerCliFlags() {
+	sflag.RegisterWithShort("passes", 'n', sflag.Options{ValueRequired: true, ValueType: sflag.ValueInt})
+	sflag.RegisterWithShort("verbose", 'v', sflag.Options{ValueType: sflag.ValueBoolCount})
+	sflag.RegisterWithShort("quiet", 'q', sflag.Options{ValueType: sflag.ValueBoolCount})
+	sflag.RegisterWithShort("logs", 'l', sflag.Options{})
+	sflag.RegisterWithShort("size", 's', sflag.Options{ValueType: sflag.ValueSize, ValueRequired: true})
+	sflag.RegisterWithShort("zero", 'z', sflag.Options{})
+	sflag.RegisterWithShort("interactive", 'i', sflag.Options{})
+	sflag.Register("log-level", sflag.Options{ValueRequired: true, ValueType: sflag.ValueString})
+	sflag.Register("exclude", sflag.Options{ValueType: sflag.ValueString, ValueRequired: true})
+	sflag.Register("log-path", sflag.Options{ValueType: sflag.ValueString, ValueRequired: true})
+	sflag.Register("dry-run", sflag.Options{})
+	sflag.Register("help", sflag.Options{})
+	sflag.Register("version", sflag.Options{})
+	sflag.Register("buffer", sflag.Options{ValueType: sflag.ValueInt, ValueRequired: true})
+}
+
 var (
 	fileNoWrite      []string
 	dirNoReadAndExec []string
@@ -43,15 +60,45 @@ var rshredConf = ConfigSpec{
 }
 
 func decideInteract(args []string) int {
-	if len(args) > 0 {
-		return cli(args)
-	} else {
+	registerCliFlags()
+	results, leftovers, err := sflag.Parse(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		return 1
+	}
+	if results["interactive"].Seen {
 		return interact()
 	}
+	return cli(results, leftovers)
 }
 
-func cli(args []string) int {
-	fmt.Println("you did cli stuff")
+func cli(results sflag.Results, leftovers []string) int {
+	var crntLogLevel logLevel
+	if results["help"].Seen {
+		fmt.Println("help")
+		return 0
+	}
+	if results["version"].Seen {
+		fmt.Println(rVersion)
+		return 0
+	}
+	switch results["log-level"].Value.(string) {
+	case "fatal":
+		crntLogLevel = logFatal
+	case "error":
+		crntLogLevel = logError
+	case "warning":
+		crntLogLevel = logWarning
+	case "info":
+		crntLogLevel = logInfo
+	case "debug":
+		crntLogLevel = logDebug
+	default:
+		log(os.Stderr, logError, logInfo, fmt.Sprintf("invalid log level %q", results["log-level"].Value.(string)))
+	}
+	for _, leftover := range leftovers {
+		fmt.Println(leftover)
+	}
 	return 0
 }
 
@@ -289,7 +336,7 @@ func interact() int {
 	fmt.Println("-z, --zero -- overwrite the file with null bytes (0x00 or 00000000) after random shredding.")
 	for {
 		interactArgs := strings.Fields(QueryUser("\nPlease enter the flags you would like to use."))
-		results, leftover, err := sflag.Parse(interactArgs)
+		_, leftover, err := sflag.Parse(interactArgs)
 		if err != nil {
 			fmt.Println(err)
 			continue

@@ -63,7 +63,7 @@ func decideInteract(args []string) int {
 	registerCliFlags()
 	results, leftovers, err := sflag.Parse(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		log(os.Stderr, logFatal, logInfo, err.Error())
 		return 1
 	}
 	if results["interactive"].Seen {

@@ -10,10 +10,20 @@ import (
 type Config struct {
 	Key     string
 	Default any
-	ValType int
+	ValType confValType
 	Comment []string
 	Value   any
 }
+
+type confValType uint8
+
+const (
+	confBool confValType = iota
+	confInt
+	confString
+	confList
+	confBarrier
+)
 
 type ConfigSpec []*Config
 
@@ -35,13 +45,14 @@ func TransferConf(crntConf ConfigSpec, oldFile []string) []string {
 	ParseConfig(oldFile, confCopy)
 	for _, item := range confCopy {
 		if item.Value != nil {
-			if item.ValType == 0 {
-				if item.Value == true {
+			switch item.ValType {
+			case confBool:
+				if item.Value.(bool) {
 					item.Default = "ON"
 				} else {
 					item.Default = "OFF"
 				}
-			} else {
+			default:
 				item.Default = item.Value
 			}
 		}
@@ -73,7 +84,7 @@ func GenConfig(spec ConfigSpec) []string {
 	confOut := make([]string, fileCap)
 	line := 0
 	for _, item := range spec {
-		if item.ValType != 3 {
+		if item.ValType != confList {
 			for i, comment := range item.Comment {
 				confOut[line+i] = fmt.Sprintf("# %v", comment)
 			}
@@ -89,9 +100,18 @@ func GenConfig(spec ConfigSpec) []string {
 			if comNum := len(item.Comment); comNum > 0 {
 				line = line + comNum + 1
 			}
+			defListItems := 0
 			confOut[line] = fmt.Sprintf("%v= {", item.Key)
-			confOut[line+2] = "}"
-			line = line + 4
+			if items := len(item.Default.([]string)); items > 0 {
+				for j, listItem := range item.Default.([]string) {
+					confOut[line+j+1] = listItem
+				}
+				defListItems = items
+			} else {
+				defListItems = 1
+			}
+			confOut[line+defListItems+1] = "}"
+			line = line + defListItems + 3
 		}
 	}
 	return confOut
@@ -100,7 +120,7 @@ func GenConfig(spec ConfigSpec) []string {
 func LoadDefault(registry ConfigSpec) {
 	for _, conf := range registry {
 		switch conf.ValType {
-		case 0:
+		case confBool:
 			switch conf.Default {
 			case "ON":
 				conf.Value = true
@@ -109,19 +129,26 @@ func LoadDefault(registry ConfigSpec) {
 			default:
 				panic("config item is bool, but default isn't ON or OFF")
 			}
-		case 1:
+		case confInt:
 			num, ok := conf.Default.(int)
 			if !ok {
 				panic(fmt.Sprintf("config key %q takes an int, but default value is not an int!", conf.Key))
 			} else {
 				conf.Value = num
 			}
-		case 2:
+		case confString:
 			defString, ok := conf.Default.(string)
 			if !ok {
 				panic(fmt.Sprintf("config key %q takes a string, but default value is not a string!", conf.Key))
 			} else {
 				conf.Value = defString
+			}
+		case confList:
+			defList, ok := conf.Default.([]string)
+			if !ok {
+				panic(fmt.Sprintf("config key %q takes a list, but default value is not a []string!", conf.Key))
+			} else {
+				conf.Value = defList
 			}
 		default:
 			panic(fmt.Sprintf("invalid ValType %q", conf))
@@ -157,8 +184,11 @@ func ParseConfig(confFile []string, registry ConfigSpec) []error {
 			if conf == nil {
 				errs = append(errs, fmt.Errorf("line %v: unrecognized key: %q", i+1, key))
 			} else {
+				if conf.ValType >= confBarrier {
+					panic(fmt.Sprintf("unrecognized config value type %d", conf.ValType))
+				}
 				switch conf.ValType {
-				case 0:
+				case confBool:
 					switch value {
 					case "ON":
 						conf.Value = true
@@ -167,7 +197,7 @@ func ParseConfig(confFile []string, registry ConfigSpec) []error {
 					default:
 						errs = append(errs, fmt.Errorf("line %v: value of %q must be either \"ON\" or \"OFF\"", i+1, key))
 					}
-				case 1:
+				case confInt:
 					num, err := strconv.Atoi(value)
 					if err != nil {
 						if errors.Is(err, strconv.ErrRange) {
@@ -178,14 +208,12 @@ func ParseConfig(confFile []string, registry ConfigSpec) []error {
 					} else {
 						conf.Value = num
 					}
-				case 2:
+				case confString:
 					conf.Value = value
-				case 3:
+				case confList:
 					listLn = i
 					listEntry = conf
 					inList = true
-				default:
-					panic(fmt.Sprintf("invalid conf value %q", conf.ValType))
 				}
 			}
 		}

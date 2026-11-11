@@ -84,6 +84,11 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 				}
 			}
 		}
+		if syncErr := file.Sync(); syncErr != nil {
+			finalErr <- fmt.Errorf("failed to sync file to disk")
+		} else {
+			finalErr <- nil
+		}
 	}()
 	go func() {
 		defer func() {

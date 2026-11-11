@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
+
+	"codeberg.org/TrollgeEngineering/sflag"
 )
 
 type logMessage struct {
@@ -17,7 +19,7 @@ var done = make(chan struct{})
 
 func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery uint) (chan logMessage, chan error, error) {
 	if bufSize > 50*(1<<20) {
-		return nil, nil, fmt.Errorf("buffer size of %d MiB is too big (maximum is 50 MiB)", bufSize>>20)
+		return nil, nil, fmt.Errorf("buffer size of %s is too big (maximum is 50 MiB)", sflag.Size(bufSize>>20))
 	}
 	var written atomic.Uint64
 	buf := make([]byte, bufSize)
@@ -29,14 +31,14 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 		return nil, nil, fmt.Errorf("target is a directory")
 	}
 	if depth&(1<<63) != 0 {
-		return nil, nil, fmt.Errorf("size too big")
+		return nil, nil, fmt.Errorf("specified depth of %s is too large", sflag.Size(depth))
 	}
 	progress, finalErr := make(chan logMessage), make(chan error, 1)
 	size := uint64(info.Size())
 	if (size > depth) && depth != 0 {
 		amount = depth
 	} else {
-		progress <- logMessage{fmt.Sprintf("specified depth (%d bytes) is larger than size of file (%d bytes); clamping depth to file size", depth, size), logDebug}
+		progress <- logMessage{fmt.Sprintf("specified depth (%s) is larger than size of file (%s); clamping depth to file size", sflag.Size(depth), sflag.Size(size)), logDebug}
 		amount = size
 	}
 	progTick := time.NewTicker(time.Duration(reportEvery * uint(time.Second)))
@@ -48,12 +50,12 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 			default:
 			}
 		}()
-		select {
-		case <-done:
-			return
-		default:
-			for written.Load() < amount {
-				lastSync := time.Now()
+		lastSync := time.Now()
+		for written.Load() < amount {
+			select {
+			case <-done:
+				return
+			default:
 				var n []byte
 				if !zero {
 					rand.Read(buf)

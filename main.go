@@ -72,6 +72,25 @@ var rshredConf = ConfigSpec{
 }
 
 func decideInteract(args []string) int {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP)
+	go func() {
+		sig := <-sigChan
+		select {
+		case done <- struct{}{}:
+		default:
+		}
+		fmt.Fprintf(os.Stderr, "\nInterrupt recieved!\n\n")
+		fmt.Fprintln(os.Stderr, "Quitting...")
+		if sysSig, ok := sig.(syscall.Signal); ok {
+			exitCode := 128 + int(sysSig)
+			os.Exit(exitCode)
+		} else {
+			os.Exit(2)
+		}
+	}()
 	registerCliFlags()
 	results, leftovers, err := sflag.Parse(args)
 	if err != nil {
@@ -179,21 +198,6 @@ func cli(results sflag.Results, leftovers []string) int {
 }
 
 func interact() int {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP)
-	go func() {
-		sig := <-sigChan
-		fmt.Fprintf(os.Stderr, "\nInterrupt recieved!\n\n")
-		fmt.Fprintln(os.Stderr, "Quitting...")
-		if sysSig, ok := sig.(syscall.Signal); ok {
-			exitCode := 128 + int(sysSig)
-			os.Exit(exitCode)
-		} else {
-			os.Exit(2)
-		}
-	}()
 	confDir, err := os.UserConfigDir()
 	if err != nil {
 		PrintExtraNewline("error getting config directory. loading default settings.")

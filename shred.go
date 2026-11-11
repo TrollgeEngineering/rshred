@@ -5,49 +5,124 @@ import (
 	"fmt"
 	"os"
 	"sync/atomic"
+	"time"
 )
 
-func Shred(file *os.File, zero bool, depth uint64, bufSize uint64) error {
+type logMessage struct {
+	message string
+	level   logLevel
+}
+
+var done = make(chan struct{})
+
+func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery uint) (chan logMessage, chan error, error) {
 	var written atomic.Uint64
 	buf := make([]byte, bufSize)
 	var amount uint64
 	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("failed to get file info")
+		return nil, nil, fmt.Errorf("failed to get file info")
 	} else if info.IsDir() {
-		return fmt.Errorf("target is a directory")
+		return nil, nil, fmt.Errorf("target is a directory")
 	}
 	if depth&(1<<63) != 0 {
-		return fmt.Errorf("size too big")
+		return nil, nil, fmt.Errorf("size too big")
 	}
+	progress, finalErr := make(chan logMessage), make(chan error, 1)
 	size := uint64(info.Size())
 	if (size > depth) && depth != 0 {
 		amount = depth
 	} else {
+		progress <- logMessage{fmt.Sprintf("specified depth (%d bytes) is larger than size of file (%d bytes); clamping depth to file size", depth, size), logDebug}
 		amount = size
 	}
-	for written.Load() < amount {
-		var n []byte
-		if !zero {
-			rand.Read(buf)
-		} else {
-			for i := range buf {
-				buf[i] = 0x00
+	progTick := time.NewTicker(time.Duration(reportEvery * uint(time.Second)))
+	start := time.Now()
+	go func() {
+		defer func() {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+		}()
+		select {
+		case <-done:
+			return
+		default:
+			for written.Load() < amount {
+				lastSync := time.Now()
+				var n []byte
+				if !zero {
+					rand.Read(buf)
+				} else {
+					for i := range buf {
+						buf[i] = 0x00
+					}
+				}
+				if remaining := amount - written.Load(); remaining < bufSize {
+					n = buf[:remaining]
+				} else {
+					n = buf
+				}
+				if wrote, err := file.Write(n); err != nil {
+					finalErr <- fmt.Errorf("failed to write to file")
+					return
+				} else {
+					if time.Since(lastSync) > 2*time.Second {
+						if syncErr := file.Sync(); syncErr != nil {
+							finalErr <- fmt.Errorf("failed to sync file to disk")
+							return
+						}
+						lastSync = time.Now()
+						written.Add(uint64(wrote))
+					}
+				}
 			}
 		}
-		if remaining := amount - written.Load(); remaining < bufSize {
-			n = buf[:remaining]
-		} else {
-			n = buf
+	}()
+	go func() {
+		defer func() {
+			close(progress)
+		}()
+		var old atomic.Uint64
+		var delta atomic.Uint64
+		var bytesWritten atomic.Uint64
+		var speed float64
+		var avgSpeed float64
+		var speedText string
+		var avgSpeedText string
+		for {
+			select {
+			case <-done:
+				return
+			case <-progTick.C:
+				bytesWritten.Store(written.Load())
+				delta.Store(bytesWritten.Load() - old.Load())
+				speed = float64(delta.Load()) / float64(reportEvery)
+				avgSpeed = float64(bytesWritten.Load()) / float64(time.Since(start).Seconds())
+				switch {
+				case speed < 1024.0:
+					speedText = fmt.Sprintf("%.0fB/s", speed)
+				case speed < 1024.0*1024.0:
+					speedText = fmt.Sprintf("%.2fKiB/s", speed/1024.0)
+				default:
+					speedText = fmt.Sprintf("%.2fMiB/s", speed/(1024.0*1024.0))
+				}
+				switch {
+				case avgSpeed < 1024.0:
+					avgSpeedText = fmt.Sprintf("%.0fB/s", avgSpeed)
+				case avgSpeed < 1024.0*1024.0:
+					avgSpeedText = fmt.Sprintf("%.2fKiB/s", avgSpeed/1024.0)
+				default:
+					avgSpeedText = fmt.Sprintf("%.2fMiB/s", avgSpeed/(1024.0*1024.0))
+				}
+				select {
+				case progress <- logMessage{fmt.Sprintf("shredded %d out of %d bytes. (current speed: %s) (average speed: %s)", bytesWritten.Load(), amount, speedText, avgSpeedText), logInfo}:
+				default:
+				}
+				old.Store(bytesWritten.Load())
+			}
 		}
-		if wrote, err := file.Write(n); err != nil {
-			return fmt.Errorf("failed to write to file")
-		} else {
-			written.Add(uint64(wrote))
-		}
-	}
-	if err := file.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file writes")
-	}
-	return nil
+	}()
+	return progress, finalErr, nil
 }

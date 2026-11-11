@@ -16,6 +16,9 @@ type logMessage struct {
 var done = make(chan struct{})
 
 func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery uint) (chan logMessage, chan error, error) {
+	if bufSize > 50*(1<<20) {
+		return nil, nil, fmt.Errorf("buffer size of %d MiB is too big (maximum is 50 MiB)", bufSize>>20)
+	}
 	var written atomic.Uint64
 	buf := make([]byte, bufSize)
 	var amount uint64

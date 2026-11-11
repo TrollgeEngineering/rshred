@@ -234,15 +234,19 @@ func Parse(inputArgs []string) (results Results, leftover []string, parseErr err
 							return nil, nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
 						}
 					case strings.HasPrefix(inputArgs[i-1], "-"):
-						test, ok := crntRegis.short[inputArgs[i-1][len(inputArgs[i-1])-1]] // Checks the last character of the last good argument.
-						if ok && len(inputArgs[i-1]) == 1 && !slices.Contains(consumedArgs, i-1) {
-							switch {
-							case test.valueRequired:
-								panicInternal("if it requires a value, then it should have already been marked consumed or rejected")
-							case test.valType == ValueBool && (inputArgs[i] == "true" || inputArgs[i] == "false"):
-								return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrMalformedValueTryHyphens}
+						if len(inputArgs[i-1]) == 2 && !slices.Contains(consumedArgs, i-1) {
+							test, ok := crntRegis.short[inputArgs[i-1][1]]
+							if ok {
+								switch {
+								case test.valueRequired:
+									panicInternal("if it requires a value, then it should have already been marked consumed or rejected")
+								case test.valType == ValueBool && (inputArgs[i] == "true" || inputArgs[i] == "false"):
+									return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrMalformedValueTryHyphens}
+								}
+								return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
+							} else {
+								panicInternal(fmt.Sprintf("argument %q is not a valid short flag and was not consumed; it should have been rejected", inputArgs[i-1]))
 							}
-							return nil, nil, &FlagError{Flag: inputArgs[i-1], Err: ErrNoTakeValueTryHyphens}
 						} else {
 							return nil, nil, &ArgError{inputArgs[j], ErrFlagAfterNonFlag}
 						}

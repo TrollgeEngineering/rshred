@@ -13,6 +13,23 @@ import (
 // flag has a ValueType of [ValueSize].
 type Size uint64
 
+func (s Size) String() string {
+	switch {
+	case s < 1<<10:
+		return fmt.Sprintf("%dB", s)
+	case s < 1<<20:
+		return fmt.Sprintf("%.2fKiB", float64(s)/(1<<10))
+	case s < 1<<30:
+		return fmt.Sprintf("%.2fMiB", float64(s)/(1<<20))
+	case s < 1<<40:
+		return fmt.Sprintf("%.2fGiB", float64(s)/(1<<30))
+	case s < 1<<50:
+		return fmt.Sprintf("%.2fTiB", float64(s)/(1<<40))
+	default:
+		return fmt.Sprintf("%.2fPiB", float64(s)/(1<<50))
+	}
+}
+
 type valueType uint8
 
 // This block of constants lists the types of values
@@ -72,7 +89,7 @@ func (v valueType) String() string {
 	case ValueString:
 		return "ValueString"
 	default:
-		panic(fmt.Sprintf("invalid value type %d", v))
+		return fmt.Sprintf("invalid value type %d", v)
 	}
 }
 

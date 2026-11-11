@@ -1,7 +1,7 @@
 # charm.land/lipgloss/v2 v2.0.6
 ## explicit; go 1.25.0
 charm.land/lipgloss/v2
-# codeberg.org/TrollgeEngineering/sflag v0.2.1
+# codeberg.org/TrollgeEngineering/sflag v0.3.0
 ## explicit; go 1.27.0
 codeberg.org/TrollgeEngineering/sflag
 # github.com/charmbracelet/colorprofile v0.4.3

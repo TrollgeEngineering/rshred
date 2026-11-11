@@ -16,20 +16,21 @@ import (
 )
 
 func registerCliFlags() {
-	sflag.RegisterWithShort("passes", 'n', sflag.Options{ValueRequired: true, ValueType: sflag.ValueInt})
-	sflag.RegisterWithShort("verbose", 'v', sflag.Options{ValueType: sflag.ValueBoolCount})
-	sflag.RegisterWithShort("quiet", 'q', sflag.Options{ValueType: sflag.ValueBoolCount})
-	sflag.RegisterWithShort("logs", 'l', sflag.Options{})
-	sflag.RegisterWithShort("size", 's', sflag.Options{ValueType: sflag.ValueSize, ValueRequired: true})
-	sflag.RegisterWithShort("zero", 'z', sflag.Options{})
+	sflag.RegisterWithShort("passes", 'n', sflag.Options{ValueRequired: true, ValueType: sflag.ValueInt, Default: 3})
+	sflag.RegisterWithShort("verbose", 'v', sflag.Options{ValueType: sflag.ValueBoolCount, ConflictsWith: []string{"quiet"}})
+	sflag.RegisterWithShort("quiet", 'q', sflag.Options{ValueType: sflag.ValueBoolCount, ConflictsWith: []string{"verbose"}})
+	sflag.RegisterWithShort("logs", 'l', sflag.Options{Default: false})
+	sflag.RegisterWithShort("size", 's', sflag.Options{ValueType: sflag.ValueSize, ValueRequired: true, Default: 0})
+	sflag.RegisterWithShort("zero", 'z', sflag.Options{Default: true})
 	sflag.RegisterWithShort("interactive", 'i', sflag.Options{})
-	sflag.Register("log-level", sflag.Options{ValueRequired: true, ValueType: sflag.ValueString})
+	sflag.Register("log-level", sflag.Options{ValueRequired: true, ValueType: sflag.ValueString, Default: true, ConflictsWith: []string{"quiet", "verbose"}})
 	sflag.Register("exclude", sflag.Options{ValueType: sflag.ValueString, ValueRequired: true})
 	sflag.Register("log-path", sflag.Options{ValueType: sflag.ValueString, ValueRequired: true})
 	sflag.Register("dry-run", sflag.Options{})
 	sflag.Register("help", sflag.Options{})
 	sflag.Register("version", sflag.Options{})
-	sflag.Register("buffer", sflag.Options{ValueType: sflag.ValueInt, ValueRequired: true})
+	sflag.Register("buffer", sflag.Options{ValueType: sflag.ValueInt, ValueRequired: true, Default: sflag.Size(4096)})
+	sflag.Register("gen-config", sflag.Options{})
 }
 
 var (
@@ -45,11 +46,11 @@ var shredVictims = map[string]int{}
 
 var rshredConf = ConfigSpec{
 	&Config{Key: "CheckForUpdates", Default: "OFF", Comment: []string{"Checks for updates on boot. (ON/OFF) Default:"}},
-	&Config{Key: "LogPath", ValType: 2, Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
+	&Config{Key: "LogPath", ValType: confString, Default: "~/.rshred/logs", Comment: []string{"Full path for the logfiles. Default: ~/.rshred/logs"}},
 	&Config{Key: "ExcludeDirsPrompt", Default: "OFF", Comment: []string{"Displays a prompt after flag selection for directories to exclude from shredding on a per-run basis."}},
 	&Config{Key: "ExcludeConfigDirs", Default: "ON", Comment: []string{"Enables the exclusion of the directories set below. (ON/OFF) Default: ON"}},
 	&Config{
-		Key: "ExcludedDirectories", ValType: 3, Comment: []string{
+		Key: "ExcludeDirectories", ValType: confList, Comment: []string{
 			"Full paths of directories you always want to exlude from shredding.",
 			"Put the FULL, ABSOLUTE PATHS of the directories you want between the brackets (\"{\" and \"}\")",
 			"Put one directory path per line.",
@@ -57,6 +58,17 @@ var rshredConf = ConfigSpec{
 		},
 	},
 	&Config{Key: "RemoveDirectories", Default: "OFF", Comment: []string{"Attempts to remove all empty directories if the -u flag is used."}},
+	&Config{
+		Key: "LogLevel", ValType: confString, Default: "info", Comment: []string{
+			"The threshold for which messages will be logged to the screen or file.",
+			"Setting this option to one of the below levels will cause messages of that level and above to be logged.",
+			"Fatal - Faliures that cause rshred to crash.",
+			"Error - Faliure of a specific operation that is not fatal to the program.",
+			"Warning - Not a faliure, but important information the user should know.",
+			"Info - Regular information about how rshred is running, such as shred progress.",
+			"Debug - Fine-grained detail of everything rshred is doing.",
+		},
+	},
 }
 
 func decideInteract(args []string) int {
@@ -74,6 +86,84 @@ func decideInteract(args []string) int {
 
 func cli(results sflag.Results, leftovers []string) int {
 	var crntLogLevel logLevel
+	if results["log-level"].ValueSeen {
+		switch results["log-level"].Value.(string) {
+		case "fatal":
+			crntLogLevel = logFatal
+		case "error":
+			crntLogLevel = logError
+		case "warning":
+			crntLogLevel = logWarning
+		case "info":
+			crntLogLevel = logInfo
+		case "debug":
+			crntLogLevel = logDebug
+		default:
+			log(os.Stderr, logFatal, logInfo, "invalid logging level %s", results["log-level"].Value.(string))
+			return 1
+		}
+	} else {
+		crntLogLevel = logInfo
+	}
+	confDir, err := os.UserConfigDir()
+	if err != nil {
+		log(os.Stderr, logFatal, crntLogLevel, "error getting config path")
+		return 1
+	}
+	rshredConfDir := filepath.Join(confDir, "rshred")
+	rshredConfFile := filepath.Join(rshredConfDir, "rshred.conf")
+	openConfFile, err := os.OpenFile(rshredConfDir, os.O_RDONLY, 0)
+	switch {
+	case err == nil:
+		scanner := bufio.NewScanner(openConfFile)
+		confFile := []string{}
+		for scanner.Scan() {
+			confFile = append(confFile, scanner.Text())
+		}
+		if scanner.Err() != nil {
+			log(os.Stderr, logFatal, crntLogLevel, "error reading config file at %s", rshredConfFile)
+			return 1
+		}
+		if len(confFile) < 3 {
+			log(os.Stderr, logFatal, crntLogLevel, "log file at %s is less than two lines", rshredConfFile)
+			return 1
+		}
+		err := ValidateConfig(confFile[0])
+		switch {
+		case err == nil:
+			if errs := ParseConfig(confFile[2:], rshredConf); errs != nil {
+				log(os.Stderr, logFatal, crntLogLevel, "the config file at %s has the below errors:\n", rshredConfFile)
+				for _, confErr := range errs {
+					fmt.Println(confErr)
+				}
+				return 1
+			}
+		case errors.Is(err, ErrConfVersionTooLow):
+			newConf, transferErr := TransferConf(rshredConf, confFile)
+			if transferErr != nil {
+				log(os.Stderr, logFatal, crntLogLevel, "failed to parse config file at %s", rshredConfFile)
+				return 1
+			}
+			if err := ParseConfig(newConf, rshredConf); err != nil {
+				panic("an invalid config was generated")
+			}
+			log(os.Stderr, logWarning, crntLogLevel, err.Error())
+		case errors.Is(err, ErrCorruptHeader):
+			log(os.Stderr, logFatal, crntLogLevel, "config file at %s has a corrupt header", rshredConfFile)
+			return 1
+		default:
+			panic(fmt.Sprintf("got unrecognized error %q", err))
+		}
+	case errors.Is(err, fs.ErrNotExist):
+		log(os.Stderr, logFatal, crntLogLevel, "the config file at %s does not exist. pass --gen-config or -i to generate it. if you think this is a mistake, please check the path or pass a config file with --config-file", rshredConfFile)
+		return 1
+	case errors.Is(err, fs.ErrPermission):
+		log(os.Stderr, logFatal, crntLogLevel, "permission denied while attempting to open config file at %s", rshredConfFile)
+	default:
+		log(os.Stderr, logFatal, crntLogLevel, "unknown error while attempting to open config file at %s", rshredConfFile)
+	}
+	switch rshredConf.QueryConf("LogLevel").Value.(string) {
+	}
 	if results["help"].Seen {
 		fmt.Println("help")
 		return 0
@@ -81,20 +171,6 @@ func cli(results sflag.Results, leftovers []string) int {
 	if results["version"].Seen {
 		fmt.Println(rVersion)
 		return 0
-	}
-	switch results["log-level"].Value.(string) {
-	case "fatal":
-		crntLogLevel = logFatal
-	case "error":
-		crntLogLevel = logError
-	case "warning":
-		crntLogLevel = logWarning
-	case "info":
-		crntLogLevel = logInfo
-	case "debug":
-		crntLogLevel = logDebug
-	default:
-		log(os.Stderr, logError, logInfo, fmt.Sprintf("invalid log level %q", results["log-level"].Value.(string)))
 	}
 	for _, leftover := range leftovers {
 		fmt.Println(leftover)
@@ -118,7 +194,6 @@ func interact() int {
 			os.Exit(2)
 		}
 	}()
-
 	confDir, err := os.UserConfigDir()
 	if err != nil {
 		PrintExtraNewline("error getting config directory. loading default settings.")
@@ -135,44 +210,46 @@ func interact() int {
 					if err != nil {
 						if errors.Is(err, fs.ErrPermission) {
 							PrintExtraNewline("permission denied while attempting to create config directories. loading default settings.")
-							LoadDefault(rshredConf)
 						} else {
 							PrintExtraNewline("unknown error while attempting to create config directories. loading default settings.")
-							LoadDefault(rshredConf)
 						}
 					} else {
-						openConfFile, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o700)
+						createdConfFile, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o700)
 						if err != nil {
 							switch {
 							case errors.Is(err, fs.ErrExist):
 								PrintExtraNewline("error creating config file: file exists. loading default config...")
-								LoadDefault(rshredConf)
 							case errors.Is(err, fs.ErrPermission):
 								PrintExtraNewline("error creating config file: permission denied. loading default config...")
-								LoadDefault(rshredConf)
 							default:
 								PrintExtraNewline("unknown error creating config file. loading default config...")
 							}
 						} else {
-							fmt.Fprintf(openConfFile, "Generated with rshred %v\n\n", rVersion)
-							newConf := GenConfig(rshredConf)
-							for _, line := range newConf {
-								fmt.Fprintln(openConfFile, line)
+							if _, err := fmt.Fprintf(createdConfFile, "Generated with rshred %v\n\n", rVersion); err != nil {
+								PrintExtraNewline("error writing to newly created config file. loading default config...")
+							} else {
+								newConf := GenConfig(rshredConf)
+								for _, line := range newConf {
+									if _, confLineErr := fmt.Fprintln(createdConfFile, line); confLineErr != nil {
+										PrintExtraNewline("error writing to newly created config file. loading default config...")
+										break
+									}
+								}
 							}
-							LoadDefault(rshredConf)
 						}
-						openConfFile.Close()
+						if closeErr := createdConfFile.Close(); closeErr != nil {
+							PrintExtraNewline("error closing config file at %s", confFilePath)
+						}
 					}
 				} else {
 					PrintExtraNewline("loading default config...")
 				}
 			case errors.Is(err, fs.ErrPermission):
 				PrintExtraNewline("error reading config file: permission denied. loading default config...")
-				LoadDefault(rshredConf)
 			default:
 				PrintExtraNewline("unknown error reading config file. loading default config...")
-				LoadDefault(rshredConf)
 			}
+			LoadDefault(rshredConf)
 		} else {
 			scanner := bufio.NewScanner(openConfFile)
 			var confFile []string
@@ -183,62 +260,82 @@ func interact() int {
 				PrintExtraNewline("unknown error reading config file. loading default config...")
 				LoadDefault(rshredConf)
 			} else {
-				err := ValidateConfig(confFile[0])
-				if err != nil {
-					if YesOrNo(true, "%v\nWould you like to regenerate it? Your settings will be preserved where possible.", err) {
-						newConf := TransferConf(rshredConf, confFile)
-						openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
-						fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion)
-						if err != nil {
-							switch {
-							case errors.Is(err, fs.ErrPermission):
-								PrintExtraNewline("error regenerating config file: permission denied. loading default config...")
-								LoadDefault(rshredConf)
-							default:
-								PrintExtraNewline("unknown error regenerating config file. loading default config...")
-								LoadDefault(rshredConf)
-							}
-						} else {
-							for _, item := range newConf {
-								fmt.Fprintln(openNewConf, item)
-							}
-							LoadDefault(rshredConf)
-						}
-					} else {
-						PrintExtraNewline("loading default config...")
-						LoadDefault(rshredConf)
-					}
+				if len(confFile) < 3 {
+					PrintExtraNewline("config file too short. loading default config...")
+					LoadDefault(rshredConf)
 				} else {
-					err := ParseConfig(confFile[2:], rshredConf)
+					err := ValidateConfig(confFile[0])
 					if err != nil {
-						for _, confError := range err {
-							fmt.Println(confError)
-						}
-						if YesOrNo(true, "\nThe above lines in the config file at %s are invalid.\nWould you like to regenerate it? Your settings will be preserved where possible.", confFilePath) {
-							newConf := TransferConf(rshredConf, confFile)
-							openNewConf, err := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
-							fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion)
-							if err != nil {
+						if YesOrNo(true, "%v\nWould you like to regenerate it? Your settings will be preserved where possible.", err) {
+							newConf, _ := TransferConf(rshredConf, confFile)
+							openNewConf, openErr := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+							if openErr != nil {
 								switch {
-								case errors.Is(err, fs.ErrPermission):
-									PrintExtraNewline("error regenerating config file: permission denied. loading default config...")
-									LoadDefault(rshredConf)
+								case errors.Is(openErr, fs.ErrPermission):
+									PrintExtraNewline("error regenerating config file: permission denied. your preserved config will be loaded for this run, but could not be saved.")
 								default:
-									PrintExtraNewline("unknown error regenerating config file. loading default config...")
-									LoadDefault(rshredConf)
+									PrintExtraNewline("unknown error regenerating config file. your preserved config will be loaded for this run, but could not be saved.")
 								}
 							} else {
-								for _, item := range newConf {
-									fmt.Fprintln(openNewConf, item)
+								if _, confWriteErr := fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion); confWriteErr != nil {
+									PrintExtraNewline("error writing to newly created config file. your preserved config will be loaded for this run, but could not be saved.")
+								} else {
+									for _, item := range newConf {
+										if _, confWriteErr := fmt.Fprintln(openNewConf, item); confWriteErr != nil {
+											PrintExtraNewline("error writing to newly created config file. your preserved config will be loaded for this run, but could not be saved.")
+											break
+										}
+									}
 								}
-								LoadDefault(rshredConf)
+							}
+							if preserveError := ParseConfig(newConf, rshredConf); preserveError != nil {
+								panic("an invalid config file was generated")
 							}
 						} else {
 							PrintExtraNewline("loading default config...")
 							LoadDefault(rshredConf)
 						}
+					} else {
+						parseErr := ParseConfig(confFile[2:], rshredConf)
+						if parseErr != nil {
+							for _, confError := range parseErr {
+								fmt.Println(confError)
+							}
+							if YesOrNo(true, "\nThe above lines in the config file at %s are invalid.\nWould you like to regenerate it? Your settings will be preserved where possible.", confFilePath) {
+								newConf, _ := TransferConf(rshredConf, confFile)
+								openNewConf, openErr := os.OpenFile(confFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+								if openErr != nil {
+									switch {
+									case errors.Is(openErr, fs.ErrPermission):
+										PrintExtraNewline("error regenerating config file: permission denied. your preserved config will be loaded for this run, but could not be saved.")
+									default:
+										PrintExtraNewline("unknown error regenerating config file. your preserved config will be loaded for this run, but could not be saved.")
+									}
+								} else {
+									if _, confWriteErr := fmt.Fprintf(openNewConf, "Generated with rshred %v\n\n", rVersion); confWriteErr != nil {
+										PrintExtraNewline("failed to write to newly generated config file. your preserved config will be loaded for this run, but could not be saved.")
+									} else {
+										for _, item := range newConf {
+											if _, confWriteErr := fmt.Fprintln(openNewConf, item); confWriteErr != nil {
+												PrintExtraNewline("failed to write to newly created config file. your preserved config will be loaded for this run, but could not be saved.")
+												break
+											}
+										}
+									}
+								}
+								if newParseErr := ParseConfig(newConf, rshredConf); newParseErr != nil {
+									panic("generated invalid config file")
+								}
+							} else {
+								PrintExtraNewline("loading default config...")
+								LoadDefault(rshredConf)
+							}
+						}
 					}
 				}
+			}
+			if closeErr := openConfFile.Close(); closeErr != nil {
+				PrintExtraNewline("error closing config file")
 			}
 		}
 	}

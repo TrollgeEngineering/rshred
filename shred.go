@@ -4,10 +4,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"sync/atomic"
 )
 
 func Shred(file *os.File, zero bool, depth uint64, bufSize uint64) error {
-	var written uint64 = 0
+	var written atomic.Uint64
 	buf := make([]byte, bufSize)
 	var amount uint64
 	info, err := file.Stat()
@@ -25,7 +26,7 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64) error {
 	} else {
 		amount = size
 	}
-	for written < amount {
+	for written.Load() < amount {
 		var n []byte
 		if !zero {
 			rand.Read(buf)
@@ -34,7 +35,7 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64) error {
 				buf[i] = 0x00
 			}
 		}
-		if remaining := amount - written; remaining < bufSize {
+		if remaining := amount - written.Load(); remaining < bufSize {
 			n = buf[:remaining]
 		} else {
 			n = buf
@@ -42,7 +43,7 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64) error {
 		if wrote, err := file.Write(n); err != nil {
 			return fmt.Errorf("failed to write to file")
 		} else {
-			written = written + uint64(wrote)
+			written.Add(uint64(wrote))
 		}
 	}
 	if err := file.Sync(); err != nil {

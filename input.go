@@ -44,7 +44,7 @@ func ReadStdin() string {
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
-		fmt.Println("fatal: failed to read stdin")
+		log(os.Stderr, logFatal, logInfo, "failed to read stdin")
 		os.Exit(1)
 	}
 	input = strings.TrimRight(input, "\r\n")

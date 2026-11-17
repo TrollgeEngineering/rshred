@@ -3,7 +3,10 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -42,9 +45,9 @@ func shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 			amount = depth
 		} else {
 			if depth == 0 {
-				progress <- logMessage{fmt.Sprintf("specified depth is 0B, so shredding the entire file of size %s", sflag.Size(size)), logDebug}
+				progress <- logMessage{fmt.Sprintf("specified depth is 0B, so shredding the entire file of size %s\n", sflag.Size(size)), logDebug}
 			} else {
-				progress <- logMessage{fmt.Sprintf("specified depth (%s) is larger than size of file (%s); clamping depth to file size", sflag.Size(depth), sflag.Size(size)), logDebug}
+				progress <- logMessage{fmt.Sprintf("specified depth (%s) is larger than size of file (%s); clamping depth to file size\n", sflag.Size(depth), sflag.Size(size)), logDebug}
 			}
 			amount = size
 		}
@@ -128,12 +131,39 @@ func shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 					default:
 						avgSpeedText = fmt.Sprintf("%.2fMiB/s", avgSpeed/float64(1<<20))
 					}
-					progress <- logMessage{fmt.Sprintf("shredded %s out of %s bytes. (speed: %s)", sflag.Size(bytesWritten.Load()), sflag.Size(amount), avgSpeedText), logInfo}
+					progress <- logMessage{fmt.Sprintf("shredded %s out of %s bytes. (speed: %s)\n", sflag.Size(bytesWritten.Load()), sflag.Size(amount), avgSpeedText), logInfo}
 				} else {
-					progress <- logMessage{"calculating speed...", logInfo}
+					progress <- logMessage{"calculating speed...\n", logInfo}
 				}
 			}
 		}
 	}()
 	return progress, finalErr, nil
+}
+
+type shredOptions struct {
+	passes          uint
+	zeroPass        bool
+	logFile         string
+	verbose         bool
+	depth           sflag.Size
+	bufSize         sflag.Size
+	exclude         []string
+	removeFiles     bool
+	removeEmptyDirs bool
+}
+
+func rshred(path string, options shredOptions) (files uint, shredError uint, initErr error) {
+	if info, err := os.Stat(path); err != nil {
+		if !info.IsDir() {
+			os.OpenFile(path, os.O_WRONLY)
+		}
+	}
+	filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			if slices.Contains(options.exclude, path) {
+				return filepath.SkipDir
+			}
+		}
+	})
 }

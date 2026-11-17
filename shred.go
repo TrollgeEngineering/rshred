@@ -17,7 +17,7 @@ type logMessage struct {
 
 var done = make(chan struct{})
 
-func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery uint) (chan logMessage, chan error, error) {
+func shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery uint) (chan logMessage, chan error, error) {
 	if bufSize > 50*(1<<20) {
 		return nil, nil, fmt.Errorf("buffer size of %s is too big (maximum is 50 MiB)", sflag.Size(bufSize>>20))
 	}
@@ -34,16 +34,20 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 		return nil, nil, fmt.Errorf("specified depth of %s is too large", sflag.Size(depth))
 	}
 	progress, finalErr := make(chan logMessage), make(chan error, 1)
-	size := uint64(info.Size())
-	if (size > depth) && depth != 0 {
-		amount = depth
-	} else {
-		progress <- logMessage{fmt.Sprintf("specified depth (%s) is larger than size of file (%s); clamping depth to file size", sflag.Size(depth), sflag.Size(size)), logDebug}
-		amount = size
-	}
 	progTick := time.NewTicker(time.Duration(reportEvery * uint(time.Second)))
-	start := time.Now()
 	go func() {
+		size := uint64(info.Size())
+		var dirty uint64
+		if (size > depth) && depth != 0 {
+			amount = depth
+		} else {
+			if depth == 0 {
+				progress <- logMessage{fmt.Sprintf("specified depth is 0B, so shredding the entire file of size %s", sflag.Size(size)), logDebug}
+			} else {
+				progress <- logMessage{fmt.Sprintf("specified depth (%s) is larger than size of file (%s); clamping depth to file size", sflag.Size(depth), sflag.Size(size)), logDebug}
+			}
+			amount = size
+		}
 		defer func() {
 			select {
 			case done <- struct{}{}:
@@ -64,7 +68,7 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 						buf[i] = 0x00
 					}
 				}
-				if remaining := amount - written.Load(); remaining < bufSize {
+				if remaining := amount - (written.Load() + dirty); remaining < bufSize {
 					n = buf[:remaining]
 				} else {
 					n = buf
@@ -73,13 +77,15 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 					finalErr <- fmt.Errorf("failed to write to file")
 					return
 				} else {
+					dirty += uint64(wrote)
 					if time.Since(lastSync) > 2*time.Second {
 						if syncErr := file.Sync(); syncErr != nil {
 							finalErr <- fmt.Errorf("failed to sync file to disk")
 							return
 						}
 						lastSync = time.Now()
-						written.Add(uint64(wrote))
+						written.Add(dirty)
+						dirty = 0
 					}
 				}
 			}
@@ -94,43 +100,38 @@ func Shred(file *os.File, zero bool, depth uint64, bufSize uint64, reportEvery u
 		defer func() {
 			close(progress)
 		}()
-		var old atomic.Uint64
-		var delta atomic.Uint64
 		var bytesWritten atomic.Uint64
-		var speed float64
 		var avgSpeed float64
-		var speedText string
 		var avgSpeedText string
+		type sample struct {
+			time         time.Time
+			bytesWritten uint64
+		}
+		samples := []sample{}
 		for {
 			select {
 			case <-done:
 				return
 			case <-progTick.C:
 				bytesWritten.Store(written.Load())
-				delta.Store(bytesWritten.Load() - old.Load())
-				speed = float64(delta.Load()) / float64(reportEvery)
-				avgSpeed = float64(bytesWritten.Load()) / float64(time.Since(start).Seconds())
-				switch {
-				case speed < 1024.0:
-					speedText = fmt.Sprintf("%.0fB/s", speed)
-				case speed < 1024.0*1024.0:
-					speedText = fmt.Sprintf("%.2fKiB/s", speed/1024.0)
-				default:
-					speedText = fmt.Sprintf("%.2fMiB/s", speed/(1024.0*1024.0))
+				samples = append(samples, sample{time.Now(), bytesWritten.Load()})
+				if len(samples) > 10 {
+					samples = samples[1:]
 				}
-				switch {
-				case avgSpeed < 1024.0:
-					avgSpeedText = fmt.Sprintf("%.0fB/s", avgSpeed)
-				case avgSpeed < 1024.0*1024.0:
-					avgSpeedText = fmt.Sprintf("%.2fKiB/s", avgSpeed/1024.0)
-				default:
-					avgSpeedText = fmt.Sprintf("%.2fMiB/s", avgSpeed/(1024.0*1024.0))
+				if time.Since(samples[0].time) >= 25*time.Second {
+					avgSpeed = float64(samples[len(samples)-1].bytesWritten-samples[0].bytesWritten) / samples[len(samples)-1].time.Sub(samples[0].time).Seconds()
+					switch {
+					case avgSpeed < 1024.0:
+						avgSpeedText = fmt.Sprintf("%.0fB/s", avgSpeed)
+					case avgSpeed < 1024.0*1024.0:
+						avgSpeedText = fmt.Sprintf("%.2fKiB/s", avgSpeed/float64(1<<10))
+					default:
+						avgSpeedText = fmt.Sprintf("%.2fMiB/s", avgSpeed/float64(1<<20))
+					}
+					progress <- logMessage{fmt.Sprintf("shredded %s out of %s bytes. (speed: %s)", sflag.Size(bytesWritten.Load()), sflag.Size(amount), avgSpeedText), logInfo}
+				} else {
+					progress <- logMessage{"calculating speed...", logInfo}
 				}
-				select {
-				case progress <- logMessage{fmt.Sprintf("shredded %d out of %d bytes. (current speed: %s) (average speed: %s)", bytesWritten.Load(), amount, speedText, avgSpeedText), logInfo}:
-				default:
-				}
-				old.Store(bytesWritten.Load())
 			}
 		}
 	}()

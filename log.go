@@ -40,7 +40,7 @@ func (l logLevel) String() string {
 	}
 }
 
-func log(writer io.Writer, level logLevel, crntLevel logLevel, message string, a ...any) error {
+func log(writers []io.Writer, level logLevel, crntLevel logLevel, message string, a ...any) error {
 	if level >= barrier {
 		panic(fmt.Sprintf("invalid logLevel %d", level))
 	}
@@ -48,8 +48,10 @@ func log(writer io.Writer, level logLevel, crntLevel logLevel, message string, a
 		panic(fmt.Sprintf("invalid logLevel %d", crntLevel))
 	}
 	if level <= crntLevel {
-		if _, err := lipgloss.Fprintf(writer, fmt.Sprintf("%s %s", level, message), a...); err != nil {
-			return fmt.Errorf("failed to log message %q", message)
+		for _, w := range writers {
+			if _, err := lipgloss.Fprintf(w, fmt.Sprintf("%s %s", level, message), a...); err != nil {
+				return fmt.Errorf("failed to log message %q", message)
+			}
 		}
 	}
 	return nil

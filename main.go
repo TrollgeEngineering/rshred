@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/signal"
@@ -94,7 +95,7 @@ func decideInteract(args []string) int {
 	registerCliFlags()
 	results, leftovers, err := sflag.Parse(args)
 	if err != nil {
-		log(os.Stderr, logFatal, logInfo, err.Error())
+		log([]io.Writer{os.Stderr}, logFatal, logInfo, err.Error())
 		return 1
 	}
 	if results["interactive"].Seen {
@@ -118,7 +119,7 @@ func cli(results sflag.Results, leftovers []string) int {
 		case "debug":
 			crntLogLevel = logDebug
 		default:
-			log(os.Stderr, logFatal, logInfo, "invalid logging level %s", results["log-level"].Value.(string))
+			log([]io.Writer{os.Stderr}, logFatal, logInfo, "invalid logging level %s", results["log-level"].Value.(string))
 			return 1
 		}
 	} else {
@@ -126,7 +127,7 @@ func cli(results sflag.Results, leftovers []string) int {
 	}
 	confDir, err := os.UserConfigDir()
 	if err != nil {
-		log(os.Stderr, logFatal, crntLogLevel, "error getting config path")
+		log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "error getting config path")
 		return 1
 	}
 	rshredConfDir := filepath.Join(confDir, "rshred")
@@ -140,18 +141,18 @@ func cli(results sflag.Results, leftovers []string) int {
 			confFile = append(confFile, scanner.Text())
 		}
 		if scanner.Err() != nil {
-			log(os.Stderr, logFatal, crntLogLevel, "error reading config file at %s", rshredConfFile)
+			log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "error reading config file at %s", rshredConfFile)
 			return 1
 		}
 		if len(confFile) < 3 {
-			log(os.Stderr, logFatal, crntLogLevel, "log file at %s is less than two lines", rshredConfFile)
+			log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "log file at %s is less than two lines", rshredConfFile)
 			return 1
 		}
 		err := ValidateConfig(confFile[0])
 		switch {
 		case err == nil:
 			if errs := ParseConfig(confFile[2:], rshredConf); errs != nil {
-				log(os.Stderr, logFatal, crntLogLevel, "the config file at %s has the below errors:\n", rshredConfFile)
+				log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "the config file at %s has the below errors:\n", rshredConfFile)
 				for _, confErr := range errs {
 					fmt.Println(confErr)
 				}
@@ -160,26 +161,26 @@ func cli(results sflag.Results, leftovers []string) int {
 		case errors.Is(err, ErrConfVersionTooLow):
 			newConf, transferErr := TransferConf(rshredConf, confFile)
 			if transferErr != nil {
-				log(os.Stderr, logFatal, crntLogLevel, "failed to parse config file at %s", rshredConfFile)
+				log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "failed to parse config file at %s", rshredConfFile)
 				return 1
 			}
 			if err := ParseConfig(newConf, rshredConf); err != nil {
 				panic("an invalid config was generated")
 			}
-			log(os.Stderr, logWarning, crntLogLevel, err.Error())
+			log([]io.Writer{os.Stderr}, logWarning, crntLogLevel, err.Error())
 		case errors.Is(err, ErrCorruptHeader):
-			log(os.Stderr, logFatal, crntLogLevel, "config file at %s has a corrupt header", rshredConfFile)
+			log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "config file at %s has a corrupt header", rshredConfFile)
 			return 1
 		default:
 			panic(fmt.Sprintf("got unrecognized error %q", err))
 		}
 	case errors.Is(err, fs.ErrNotExist):
-		log(os.Stderr, logFatal, crntLogLevel, "the config file at %s does not exist. pass --gen-config or -i to generate it. if you think this is a mistake, please check the path or pass a config file with --config-file", rshredConfFile)
+		log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "the config file at %s does not exist. pass --gen-config or -i to generate it. if you think this is a mistake, please check the path or pass a config file with --config-file", rshredConfFile)
 		return 1
 	case errors.Is(err, fs.ErrPermission):
-		log(os.Stderr, logFatal, crntLogLevel, "permission denied while attempting to open config file at %s", rshredConfFile)
+		log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "permission denied while attempting to open config file at %s", rshredConfFile)
 	default:
-		log(os.Stderr, logFatal, crntLogLevel, "unknown error while attempting to open config file at %s", rshredConfFile)
+		log([]io.Writer{os.Stderr}, logFatal, crntLogLevel, "unknown error while attempting to open config file at %s", rshredConfFile)
 	}
 	switch rshredConf.QueryConf("LogLevel").Value.(string) {
 	}

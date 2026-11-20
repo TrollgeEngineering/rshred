@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -169,13 +170,13 @@ func rshred(rootPath string, options shredOptions) (files uint, shredError uint,
 		info, statErr := os.Lstat(path)
 		switch {
 		case statErr != nil:
-			log(os.Stderr, logError, options.logLevel, "failed to stat file at %s: %s\n", path, statErr)
+			log([]io.Writer{os.Stderr}, logError, options.logLevel, "failed to stat file at %s: %s\n", path, statErr)
 			errCount++
 		case info.Mode()&os.ModeSymlink != 0:
-			log(os.Stderr, logWarning, options.logLevel, "file at %s is a symlink and will not be shredded\n", path)
+			log([]io.Writer{os.Stderr}, logWarning, options.logLevel, "file at %s is a symlink and will not be shredded\n", path)
 			if options.removeFiles {
 				if removeErr := os.Remove(path); removeErr != nil {
-					log(os.Stderr, logError, options.logLevel, "failed to remove symlink at %s: %s\n", path, removeErr)
+					log([]io.Writer{os.Stderr}, logError, options.logLevel, "failed to remove symlink at %s: %s\n", path, removeErr)
 					errCount++
 				}
 			}
@@ -185,31 +186,31 @@ func rshred(rootPath string, options shredOptions) (files uint, shredError uint,
 				if errors.Is(openErr, fs.ErrPermission) {
 					if options.force {
 						if chmodErr := file.Chmod(0o200); chmodErr != nil {
-							log(os.Stderr, logError, options.logLevel, chmodErr.Error())
+							log([]io.Writer{os.Stderr}, logError, options.logLevel, chmodErr.Error())
 							errCount++
 						} else {
 							file, openErr = root.OpenFile(path, os.O_WRONLY, 0)
 							if openErr != nil {
-								log(os.Stderr, logError, options.logLevel, openErr.Error())
+								log([]io.Writer{os.Stderr}, logError, options.logLevel, openErr.Error())
 								errCount++
 							} else {
 								crntFile = file
 							}
 						}
 					} else {
-						log(os.Stderr, logError, options.logLevel, openErr.Error())
+						log([]io.Writer{os.Stderr}, logError, options.logLevel, openErr.Error())
 						errCount++
 					}
 				} else {
-					log(os.Stderr, logError, options.logLevel, openErr.Error())
+					log([]io.Writer{os.Stderr}, logError, options.logLevel, openErr.Error())
 					errCount++
 				}
 			} else {
 				if openInfo, openStatErr := file.Stat(); openErr != nil {
-					log(os.Stderr, logError, options.logLevel, openStatErr.Error())
+					log([]io.Writer{os.Stderr}, logError, options.logLevel, openStatErr.Error())
 					errCount++
 				} else if !os.SameFile(info, openInfo) {
-					log(os.Stderr, logError, options.logLevel, "info mismatch between pre-open and post-open on file %s; skipping\n", path)
+					log([]io.Writer{os.Stderr}, logError, options.logLevel, "info mismatch between pre-open and post-open on file %s; skipping\n", path)
 					errCount++
 				} else {
 					crntFile = file
@@ -219,14 +220,14 @@ func rshred(rootPath string, options shredOptions) (files uint, shredError uint,
 				for i := 0; i > options.passes; i++ {
 					progChan, errChan, initErr := shred(crntFile, false, options.depth, options.bufSize, 5)
 					if initErr != nil {
-						log(os.Stderr, logError, options.logLevel, "failed to shred file at %s: %s", path, initErr)
+						log([]io.Writer{os.Stderr}, logError, options.logLevel, "failed to shred file at %s: %s", path, initErr)
 						errCount++
 					} else {
 						for message := range progChan {
-							log(os.Stdout, message.level, options.logLevel, message.message)
+							log([]io.Writer{os.Stdout}, message.level, options.logLevel, message.message)
 						}
 						if finalErr := <-errChan; finalErr != nil {
-							log(os.Stderr, logError, options.logLevel, "error occured while shredding file at %s: %s", path, finalErr)
+							log([]io.Writer{os.Stderr}, logError, options.logLevel, "error occured while shredding file at %s: %s", path, finalErr)
 							errCount++
 						}
 					}
@@ -234,14 +235,14 @@ func rshred(rootPath string, options shredOptions) (files uint, shredError uint,
 				if options.zeroPass {
 					progChan, errChan, initErr := shred(crntFile, true, options.depth, options.bufSize, 5)
 					if initErr != nil {
-						log(os.Stderr, logError, options.logLevel, "failed to shred file at %s: %s", path, initErr)
+						log([]io.Writer{os.Stderr}, logError, options.logLevel, "failed to shred file at %s: %s", path, initErr)
 						errCount++
 					} else {
 						for message := range progChan {
-							log(os.Stdout, message.level, options.logLevel, message.message)
+							log([]io.Writer{os.Stdout}, message.level, options.logLevel, message.message)
 						}
 						if finalErr := <-errChan; finalErr != nil {
-							log(os.Stderr, logError, options.logLevel, "failed to shred file at %s: %s", path, finalErr)
+							log([]io.Writer{os.Stderr}, logError, options.logLevel, "failed to shred file at %s: %s", path, finalErr)
 							errCount++
 						}
 					}

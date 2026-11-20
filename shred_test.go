@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strconv"
@@ -79,7 +80,7 @@ func TestShred(t *testing.T) {
 		t.Fatalf("failed to begin shredding file at shred_tests/test1.txt: %s", initShredErr)
 	}
 	for message := range progress {
-		log(os.Stdout, message.level, logDebug, message.message)
+		log([]io.Writer{os.Stdout}, message.level, logDebug, message.message)
 	}
 	if shredErr := <-finalErr; shredErr != nil {
 		t.Fatalf("failed to shred file at shred_tests/test1.txt: %s", shredErr)
@@ -105,7 +106,7 @@ func TestShred(t *testing.T) {
 		t.Fatalf("failed to begin shredding file at shred_tests/test2.txt: %s", initShredErr)
 	}
 	for message := range progress {
-		log(os.Stdout, message.level, logDebug, message.message)
+		log([]io.Writer{os.Stdout}, message.level, logDebug, message.message)
 	}
 	if shredErr := <-finalErr; shredErr != nil {
 		t.Fatalf("failed to shred file at shred_tests/test2.txt: %s", shredErr)
@@ -118,7 +119,7 @@ func TestShred(t *testing.T) {
 		t.Fatalf("failed to begin shredding file at shred_tests/test3.txt: %s", initShredErr)
 	}
 	for message := range progress {
-		log(os.Stdout, message.level, logDebug, message.message)
+		log([]io.Writer{os.Stdout}, message.level, logDebug, message.message)
 	}
 	if shredErr := <-finalErr; shredErr != nil {
 		t.Fatalf("failed to shred file at shred_tests/test3.txt: %s", shredErr)
